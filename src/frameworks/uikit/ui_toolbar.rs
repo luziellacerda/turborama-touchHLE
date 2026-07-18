@@ -42,6 +42,20 @@ pub const CLASSES: ClassExports = objc_classes! {
     this
 }
 
+// Programmatic construction with one of the predefined system button styles
+// (Done, Cancel, Add, etc.). The target/action are ignored here for the same
+// reason addTarget:action:forControlEvents: below ignores them: touchHLE
+// doesn't wire up bar button item taps to anything.
+- (id)initWithBarButtonSystemItem:(NSInteger)_system_item // UIBarButtonSystemItem
+                            target:(id)_target
+                            action:(SEL)_action {
+    log!(
+        "TODO: [(UIBarButtonItem*){:?} initWithBarButtonSystemItem:target:action:] (ignored)",
+        this
+    );
+    this
+}
+
 // Nib event connections send this UIControl message to bar button items.
 - (())addTarget:(id)_target
          action:(SEL)_action
