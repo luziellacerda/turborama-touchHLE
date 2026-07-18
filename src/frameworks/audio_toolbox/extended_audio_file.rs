@@ -55,6 +55,7 @@ type ExtAudioFileRef = MutPtr<OpaqueExtAudioFile>;
 type ExtAudioFilePropertyID = u32;
 const kExtAudioFileProperty_FileDataFormat: ExtAudioFilePropertyID = fourcc(b"ffmt");
 const kExtAudioFileProperty_ClientDataFormat: ExtAudioFilePropertyID = fourcc(b"cfmt");
+const kExtAudioFileProperty_FileLengthFrames: ExtAudioFilePropertyID = fourcc(b"#frm");
 
 fn ExtAudioFileOpenURL(
     env: &mut Environment,
@@ -110,6 +111,38 @@ fn ExtAudioFileGetProperty(
     out_property_data: MutVoidPtr,
 ) -> OSStatus {
     return_if_null!(in_ext_audio_file);
+
+    if in_property_id == kExtAudioFileProperty_FileLengthFrames {
+        // SInt64 number of sample frames in the file's data format
+        let required_size = guest_size_of::<i64>();
+        if env.mem.read(io_property_data_size) != required_size {
+            log!("Warning: ExtAudioFileGetProperty() failed");
+            return kAudioFileBadPropertySizeError;
+        }
+        let host_object = env
+            .framework_state
+            .audio_toolbox
+            .extended_audio_file
+            .extended_audio_files
+            .get(&in_ext_audio_file)
+            .unwrap();
+        let audio_file_host_object = env
+            .framework_state
+            .audio_toolbox
+            .audio_file
+            .audio_files
+            .get(&host_object.guest_audio_file)
+            .unwrap();
+        let desc = AudioStreamBasicDescription::from_audio_description(
+            audio_file_host_object.audio_file.audio_description(),
+        );
+        let frames: i64 = (audio_file_host_object.audio_file.packet_count() as i64)
+            .checked_mul(desc.frames_per_packet.into())
+            .unwrap();
+        env.mem.write(out_property_data.cast(), frames);
+        env.mem.write(io_property_data_size, required_size);
+        return 0; // success
+    }
 
     let audio_file_property_id = match in_property_id {
         kExtAudioFileProperty_FileDataFormat => kAudioFilePropertyDataFormat,
