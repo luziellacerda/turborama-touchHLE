@@ -5,7 +5,9 @@
  */
 //! `UIImage`.
 
-use crate::frameworks::core_graphics::cg_context::CGContextDrawImage;
+use crate::frameworks::core_graphics::cg_context::{
+    CGBlendMode, CGContextDrawImage, CGContextDrawImageWithBlendModeAndAlpha,
+};
 use crate::frameworks::core_graphics::cg_image::{
     self, CGImageGetHeight, CGImageGetWidth, CGImageRef, CGImageRelease, CGImageRetain,
 };
@@ -193,6 +195,33 @@ pub const CLASSES: ClassExports = objc_classes! {
         }
     };
     CGContextDrawImage(env, context, rect, image);
+}
+
+- (())drawAtPoint:(CGPoint)point
+         blendMode:(CGBlendMode)blend_mode
+             alpha:(CGFloat)alpha {
+    let context = UIGraphicsGetCurrentContext(env);
+    if context == nil {
+        log!("Warning: [(UIImage*){:?} drawAtPoint:{:?} blendMode:{:?} alpha:{:?}] is called with nil context, ignoring.", this, point, blend_mode, alpha);
+        return;
+    }
+    let image = env.objc.borrow::<UIImageHostObject>(this).cg_image;
+    let rect = CGRect {
+        origin: point,
+        size: CGSize {
+            width: CGImageGetWidth(env, image) as CGFloat,
+            height: CGImageGetHeight(env, image) as CGFloat,
+        }
+    };
+    CGContextDrawImageWithBlendModeAndAlpha(env, context, rect, image, blend_mode, alpha);
+}
+
+- (())drawInRect:(CGRect)rect
+        blendMode:(CGBlendMode)blend_mode
+            alpha:(CGFloat)alpha {
+    let context = UIGraphicsGetCurrentContext(env);
+    let image = env.objc.borrow::<UIImageHostObject>(this).cg_image;
+    CGContextDrawImageWithBlendModeAndAlpha(env, context, rect, image, blend_mode, alpha);
 }
 
 @end

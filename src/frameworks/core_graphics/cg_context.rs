@@ -333,7 +333,27 @@ pub fn CGContextDrawImage(
     rect: CGRect,
     image: CGImageRef,
 ) {
-    cg_bitmap_context::draw_image(env, context, rect, image);
+    cg_bitmap_context::draw_image(env, context, rect, image, /* alpha: */ 1.0);
+}
+
+/// Not a real CG function. Helper for UIImage's `drawAtPoint:blendMode:
+/// alpha:` and `drawInRect:blendMode:alpha:`, which need a one-off blend
+/// mode and alpha that aren't part of the plain `CGContextDrawImage` API
+/// (real UIKit derives these from the current graphics context state,
+/// which touchHLE doesn't fully model here). Temporarily overrides the
+/// context's blend mode for the duration of the draw, then restores it.
+pub fn CGContextDrawImageWithBlendModeAndAlpha(
+    env: &mut Environment,
+    context: CGContextRef,
+    rect: CGRect,
+    image: CGImageRef,
+    blend_mode: CGBlendMode,
+    alpha: CGFloat,
+) {
+    let old_blend_mode = env.objc.borrow::<CGContextHostObject>(context).blend_mode;
+    env.objc.borrow_mut::<CGContextHostObject>(context).blend_mode = blend_mode;
+    cg_bitmap_context::draw_image(env, context, rect, image, alpha);
+    env.objc.borrow_mut::<CGContextHostObject>(context).blend_mode = old_blend_mode;
 }
 
 fn CGContextSaveGState(env: &mut Environment, context: CGContextRef) {

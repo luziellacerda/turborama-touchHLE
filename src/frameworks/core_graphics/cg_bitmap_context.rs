@@ -646,6 +646,7 @@ pub(super) fn draw_image(
     context: CGContextRef,
     rect: CGRect,
     image: CGImageRef,
+    alpha: CGFloat,
 ) {
     let image = cg_image::borrow_image(&env.objc, image);
 
@@ -678,8 +679,8 @@ pub(super) fn draw_image(
         // Image is in top-to-bottom order, but the bitmap is bottom-to-top
         let texel_y = (image_height as f32 * (1.0 - texel_y)) as i32;
         // FIXME: might need alpha format conversion here
-        if let Some(color) = image.get_pixel((texel_x, texel_y)) {
-            drawer.put_pixel((x, y), color, /* blend: */ true)
+        if let Some((r, g, b, a)) = image.get_pixel((texel_x, texel_y)) {
+            drawer.put_pixel((x, y), (r, g, b, a * alpha), /* blend: */ true)
         }
     }
 
