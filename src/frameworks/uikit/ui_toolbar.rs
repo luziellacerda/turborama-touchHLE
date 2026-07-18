@@ -94,6 +94,25 @@ forControlEvents:(UIControlEvents)_events {
     );
 }
 
+// UIBarButtonItem has various further properties which touchHLE doesn't
+// use anywhere (there's no real toolbar/nav bar rendering), so setting
+// them is safe to ignore.
+- (())setEnabled:(bool)_enabled {
+    log!("TODO: [(UIBarButtonItem*){:?} setEnabled:] (ignored)", this);
+}
+- (bool)isEnabled {
+    true
+}
+- (())setStyle:(NSInteger)_style { // UIBarButtonItemStyle
+    log!("TODO: [(UIBarButtonItem*){:?} setStyle:] (ignored)", this);
+}
+- (())setTag:(NSInteger)_tag {
+    log!("TODO: [(UIBarButtonItem*){:?} setTag:] (ignored)", this);
+}
+- (())setTintColor:(id)_color { // UIColor*
+    log!("TODO: [(UIBarButtonItem*){:?} setTintColor:] (ignored)", this);
+}
+
 @end
 
 };
