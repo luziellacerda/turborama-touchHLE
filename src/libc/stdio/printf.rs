@@ -498,6 +498,24 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
                     res.extend_from_slice(formatted.as_bytes());
                 }
             }
+            // NSString formatting: prints [obj description], like %s does
+            // for a C string. Widely used via NSLog/NSString stringWithFormat
+            // even in plain printf-style calls, since the compiler doesn't
+            // enforce the distinction.
+            b'@' => {
+                assert!(!prepend_sign);
+                assert!(!left_justified);
+                assert!(length_modifier.is_none());
+                assert!(pad_char == ' ' && pad_width == 0); // TODO
+                let object: id = args.next(env);
+                if object != nil {
+                    let description: id = msg![env; object description];
+                    let string = ns_string::to_rust_string(env, description);
+                    res.extend_from_slice(string.as_bytes());
+                } else {
+                    res.extend_from_slice("(null)".as_bytes());
+                }
+            }
             // TODO: more specifiers
             _ => unimplemented!(
                 "Format character '{}'. Formatted up to index {}",
