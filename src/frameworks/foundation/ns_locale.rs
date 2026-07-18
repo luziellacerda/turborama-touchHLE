@@ -199,6 +199,21 @@ pub const CLASSES: ClassExports = objc_classes! {
     msg![env; this objectForKey:locale_id_key]
 }
 
+// touchHLE has no ICU/CLDR data to look up real localized display names
+// (e.g. "English" for the language code "en"), so this returns the raw
+// value verbatim. That's not correct, but it's a safer fallback than
+// crashing, and apps that merely want a non-nil string to display (rather
+// than a properly localized one) will still work.
+- (id)displayNameForKey:(id)key value:(id)value {
+    log!(
+        "TODO: [(NSLocale*){:?} displayNameForKey:{:?} value:{:?}] returning value verbatim, no localized display names are implemented.",
+        this,
+        ns_string::to_rust_string(env, key),
+        value
+    );
+    value
+}
+
 - (id)objectForKey:(id)key {
     let key_str: &str = &ns_string::to_rust_string(env, key);
     match key_str {
