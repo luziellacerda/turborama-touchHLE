@@ -119,7 +119,23 @@ impl StringHostObject {
                 StringHostObject::Utf8(Cow::Owned(string))
             }
             NSUTF8StringEncoding => {
-                let string = String::from_utf8(bytes.into_owned()).unwrap();
+                // Real Cocoa would fail (return nil) here for genuinely
+                // malformed UTF-8, but callers of decode() don't currently
+                // have a way to propagate that failure (see TODO above).
+                // Lossy conversion (replacing invalid sequences with U+FFFD)
+                // is a safe fallback: it never panics, and still produces a
+                // usable, mostly-correct string for the common case where
+                // only a few stray bytes are actually invalid.
+                let string = match String::from_utf8(bytes.into_owned()) {
+                    Ok(string) => string,
+                    Err(e) => {
+                        log!(
+                            "Warning: NSUTF8StringEncoding data isn't valid UTF-8, decoding lossily: {:?}",
+                            e
+                        );
+                        String::from_utf8_lossy(e.as_bytes()).into_owned()
+                    }
+                };
                 StringHostObject::Utf8(Cow::Owned(string))
             }
             NSWindowsCP1252StringEncoding => {
