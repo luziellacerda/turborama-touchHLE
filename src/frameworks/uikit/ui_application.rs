@@ -8,6 +8,7 @@
 use super::ui_device::*;
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::foundation::ns_string::{from_rust_string, get_static_str};
+use crate::frameworks::core_graphics::{CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::{ns_array, ns_string, NSInteger, NSUInteger};
 use crate::mem::MutPtr;
 use crate::objc::{
@@ -95,6 +96,29 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (bool)isStatusBarHidden {
     env.framework_state.uikit.ui_application.status_bar_hidden
+}
+- (CGRect)statusBarFrame {
+    // Matches real iOS: a hidden status bar has a zero frame. The status bar
+    // is 20 points tall in the pre-Retina era touchHLE targets.
+    if env.framework_state.uikit.ui_application.status_bar_hidden {
+        CGRect {
+            origin: CGPoint { x: 0.0, y: 0.0 },
+            size: CGSize {
+                width: 0.0,
+                height: 0.0,
+            },
+        }
+    } else {
+        let screen: id = msg_class![env; UIScreen mainScreen];
+        let bounds: CGRect = msg![env; screen bounds];
+        CGRect {
+            origin: CGPoint { x: 0.0, y: 0.0 },
+            size: CGSize {
+                width: bounds.size.width,
+                height: 20.0,
+            },
+        }
+    }
 }
 - (())setStatusBarHidden:(bool)hidden {
     env.framework_state.uikit.ui_application.status_bar_hidden = hidden;
