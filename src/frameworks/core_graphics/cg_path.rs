@@ -15,8 +15,8 @@
 
 use super::cg_affine_transform::CGAffineTransform;
 use super::cg_bitmap_context::CGBitmapContextDrawer;
-use super::cg_context::{CGContextHostObject, CGContextRef};
-use super::{CGFloat, CGPoint};
+use super::cg_context::{CGContextClipToRect, CGContextHostObject, CGContextRef};
+use super::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::image::gamma_decode;
 use crate::Environment;
@@ -55,6 +55,57 @@ fn CGContextClosePath(env: &mut Environment, context: CGContextRef) {
     {
         *closed = true;
     }
+}
+
+// touchHLE has no real clip-region implementation (see the TODO on
+// CGContextClipToRect). Real CGContextClip() intersects the current clip
+// with the exact shape of the current path (any shape, using the
+// nonzero-winding rule), which touchHLE can't do. What's implemented here
+// is an approximation that's still correct for the common trivial case:
+// take the current path's bounding box and hand it to
+// CGContextClipToRect(), which itself only actually supports "the whole
+// bitmap, no rotation" and errors out (rather than silently rendering
+// wrong) for anything else. So: if the path happens to be (or bound) the
+// full bitmap, this correctly does nothing; for a real non-rectangular or
+// partial clip shape, this will hit the same not-yet-implemented error
+// CGContextClipToRect already has, rather than pretending to succeed.
+fn CGContextClip(env: &mut Environment, context: CGContextRef) {
+    let subpaths = env.objc.borrow::<CGContextHostObject>(context).path.clone();
+
+    // CGContextClip() empties the current path afterward, regardless of
+    // whether the clip region could actually be represented.
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .path
+        .clear();
+
+    let mut min_x = f32::INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    for (points, _closed) in &subpaths {
+        for p in points {
+            min_x = min_x.min(p.x);
+            min_y = min_y.min(p.y);
+            max_x = max_x.max(p.x);
+            max_y = max_y.max(p.y);
+        }
+    }
+    if !min_x.is_finite() {
+        return; // Empty path: nothing to clip.
+    }
+
+    let rect = CGRect {
+        origin: CGPoint {
+            x: min_x,
+            y: min_y,
+        },
+        size: CGSize {
+            width: max_x - min_x,
+            height: max_y - min_y,
+        },
+    };
+    CGContextClipToRect(env, context, rect);
 }
 
 fn CGContextStrokePath(env: &mut Environment, context: CGContextRef) {
@@ -206,5 +257,6 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextMoveToPoint(_, _, _)),
     export_c_func!(CGContextAddLineToPoint(_, _, _)),
     export_c_func!(CGContextClosePath(_)),
+    export_c_func!(CGContextClip(_)),
     export_c_func!(CGContextStrokePath(_)),
 ];
