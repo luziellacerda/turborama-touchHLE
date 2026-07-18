@@ -210,6 +210,11 @@ pub fn CGContextSetLineWidth(env: &mut Environment, context: CGContextRef, width
         .line_width = width;
 }
 
+fn CGContextStrokeRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
+    let line_width = env.objc.borrow::<CGContextHostObject>(context).line_width;
+    CGContextStrokeRectWithWidth(env, context, rect, line_width);
+}
+
 pub fn CGContextStrokeRectWithWidth(
     env: &mut Environment,
     context: CGContextRef,
@@ -538,6 +543,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextSetLineWidth(_, _)),
     export_c_func!(CGContextSetShadowWithColor(_, _, _, _)),
     export_c_func!(CGContextFillRect(_, _)),
+    export_c_func!(CGContextStrokeRect(_, _)),
     export_c_func!(CGContextStrokeRectWithWidth(_, _, _)),
     export_c_func!(CGContextClearRect(_, _)),
     export_c_func!(CGContextClipToRect(_, _)),
