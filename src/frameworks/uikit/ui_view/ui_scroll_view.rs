@@ -66,6 +66,12 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())setPagingEnabled:(bool)_paging_enabled {
     // TODO
 }
+- (())setShowsHorizontalScrollIndicator:(bool)_shows {
+    // TODO
+}
+- (())setShowsVerticalScrollIndicator:(bool)_shows {
+    // TODO
+}
 
 - (bool)scrollEnabled {
     env.objc.borrow::<UIScrollViewHostObject>(this).scroll_enabled
