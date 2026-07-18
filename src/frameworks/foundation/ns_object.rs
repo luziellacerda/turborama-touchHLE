@@ -323,6 +323,16 @@ forUndefinedKey:(id)key { // NSString*
     add_perform_request(env, run_loop, this, sel, arg, Some(delay), false);
 }
 
+- (())performSelector:(SEL)sel onThread:(id)thread withObject:(id)arg waitUntilDone:(bool)wait {
+    log_dbg!("performSelector:{} onThread:{:?} withObject:{:?} waitUntilDone:{}", sel.as_str(&env.mem), thread, arg, wait);
+    // touchHLE doesn't model a separate run loop per background NSThread;
+    // `onThread:` is overwhelmingly targeted at the main thread in practice,
+    // so route through the same main-run-loop-based scheduling already used
+    // by performSelectorOnMainThread:withObject:waitUntilDone: rather than
+    // building out full per-thread run loop dispatch for this rarer API.
+    () = msg![env; this performSelectorOnMainThread:sel withObject:arg waitUntilDone:wait];
+}
+
 - (())performSelectorOnMainThread:(SEL)sel withObject:(id)arg waitUntilDone:(bool)wait {
     log_dbg!("performSelectorOnMainThread:{} withObject:{:?} waitUntilDone:{}", sel.as_str(&env.mem), arg, wait);
     if wait && env.current_thread == 0 {
