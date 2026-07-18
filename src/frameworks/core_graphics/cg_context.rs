@@ -76,6 +76,7 @@ type ContextState = (
 pub(super) struct CGContextHostObject {
     pub(super) subclass: CGContextSubclass,
     pub(super) rgb_fill_color: (CGFloat, CGFloat, CGFloat, CGFloat),
+    pub(super) rgb_stroke_color: (CGFloat, CGFloat, CGFloat, CGFloat),
     pub(super) font: CGFontRef,
     pub(super) font_size: CGFloat,
     /// Current transform.
@@ -166,22 +167,18 @@ fn CGContextSetGrayStrokeColor(
         alpha,
     );
 }
-fn CGContextSetRGBStrokeColor(
-    _env: &mut Environment,
+pub fn CGContextSetRGBStrokeColor(
+    env: &mut Environment,
     context: CGContextRef,
     r: CGFloat,
     g: CGFloat,
     b: CGFloat,
     a: CGFloat,
 ) {
-    log!(
-        "TODO: CGContextSetRGBStrokeColor({:?}, {}, {}, {}, {})",
-        context,
-        r,
-        g,
-        b,
-        a
-    );
+    let color = (r, g, b, a);
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .rgb_stroke_color = color;
 }
 
 fn CGContextSetShadowWithColor(
@@ -202,6 +199,77 @@ fn CGContextSetShadowWithColor(
 
 pub fn CGContextFillRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
     cg_bitmap_context::fill_rect(env, context, rect, /* clear: */ false);
+}
+
+pub fn CGContextStrokeRectWithWidth(
+    env: &mut Environment,
+    context: CGContextRef,
+    rect: CGRect,
+    line_width: CGFloat,
+) {
+    // touchHLE doesn't have real path-stroking infrastructure yet (no other
+    // stroke operation is implemented either), so this approximates the
+    // rectangle's outline by filling four thin rectangles, one per edge,
+    // with the current stroke color. This matches the visible appearance of
+    // a real CGContextStrokeRectWithWidth call for the common case of an
+    // axis-aligned, unrotated context.
+    let host_obj = env.objc.borrow::<CGContextHostObject>(context);
+    let stroke_color = host_obj.rgb_stroke_color;
+    let saved_fill_color = host_obj.rgb_fill_color;
+
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .rgb_fill_color = stroke_color;
+
+    let CGRect { origin, size } = rect;
+    let w = line_width;
+    let edges = [
+        // Top edge
+        CGRect {
+            origin,
+            size: CGSize {
+                width: size.width,
+                height: w,
+            },
+        },
+        // Bottom edge
+        CGRect {
+            origin: CGPoint {
+                x: origin.x,
+                y: origin.y + size.height - w,
+            },
+            size: CGSize {
+                width: size.width,
+                height: w,
+            },
+        },
+        // Left edge
+        CGRect {
+            origin,
+            size: CGSize {
+                width: w,
+                height: size.height,
+            },
+        },
+        // Right edge
+        CGRect {
+            origin: CGPoint {
+                x: origin.x + size.width - w,
+                y: origin.y,
+            },
+            size: CGSize {
+                width: w,
+                height: size.height,
+            },
+        },
+    ];
+    for edge in edges {
+        cg_bitmap_context::fill_rect(env, context, edge, /* clear: */ false);
+    }
+
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .rgb_fill_color = saved_fill_color;
 }
 
 pub fn CGContextClearRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
@@ -440,6 +508,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextSetRGBStrokeColor(_, _, _, _, _)),
     export_c_func!(CGContextSetShadowWithColor(_, _, _, _)),
     export_c_func!(CGContextFillRect(_, _)),
+    export_c_func!(CGContextStrokeRectWithWidth(_, _, _)),
     export_c_func!(CGContextClearRect(_, _)),
     export_c_func!(CGContextClipToRect(_, _)),
     export_c_func!(CGContextConcatCTM(_, _)),

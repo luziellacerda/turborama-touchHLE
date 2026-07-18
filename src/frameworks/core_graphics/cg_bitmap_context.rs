@@ -86,6 +86,8 @@ pub fn CGBitmapContextCreate(
         }),
         // TODO: is this the correct default?
         rgb_fill_color: (0.0, 0.0, 0.0, 0.0),
+        // TODO: is this the correct default?
+        rgb_stroke_color: (0.0, 0.0, 0.0, 0.0),
         font: Ptr::null(),
         font_size: 14.0,
         transform: CGAffineTransformIdentity,
