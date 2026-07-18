@@ -398,6 +398,12 @@ pub trait GLES {
     unsafe fn IsRenderbufferOES(&mut self, renderbuffer: GLuint) -> GLboolean;
     unsafe fn BindFramebufferOES(&mut self, target: GLenum, framebuffer: GLuint);
     unsafe fn BindRenderbufferOES(&mut self, target: GLenum, renderbuffer: GLuint);
+
+    // OES_vertex_array_object
+    unsafe fn GenVertexArraysOES(&mut self, n: GLsizei, arrays: *mut GLuint);
+    unsafe fn DeleteVertexArraysOES(&mut self, n: GLsizei, arrays: *const GLuint);
+    unsafe fn BindVertexArrayOES(&mut self, array: GLuint);
+    unsafe fn IsVertexArrayOES(&mut self, array: GLuint) -> GLboolean;
     unsafe fn RenderbufferStorageOES(
         &mut self,
         target: GLenum,

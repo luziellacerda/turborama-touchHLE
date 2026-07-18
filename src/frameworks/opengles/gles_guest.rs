@@ -1255,6 +1255,29 @@ fn glBindRenderbufferOES(env: &mut Environment, target: GLenum, renderbuffer: GL
         gles.BindRenderbufferOES(target, renderbuffer)
     })
 }
+
+// OES_vertex_array_object
+fn glGenVertexArraysOES(env: &mut Environment, n: GLsizei, arrays: MutPtr<GLuint>) {
+    with_ctx_and_mem(env, |gles, mem| {
+        let n_usize: GuestUSize = n.try_into().unwrap();
+        let arrays = mem.ptr_at_mut(arrays, n_usize);
+        unsafe { gles.GenVertexArraysOES(n, arrays) }
+    })
+}
+fn glDeleteVertexArraysOES(env: &mut Environment, n: GLsizei, arrays: ConstPtr<GLuint>) {
+    with_ctx_and_mem(env, |gles, mem| {
+        let n_usize: GuestUSize = n.try_into().unwrap();
+        let arrays = mem.ptr_at(arrays, n_usize);
+        unsafe { gles.DeleteVertexArraysOES(n, arrays) }
+    })
+}
+fn glBindVertexArrayOES(env: &mut Environment, array: GLuint) {
+    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.BindVertexArrayOES(array) })
+}
+fn glIsVertexArrayOES(env: &mut Environment, array: GLuint) -> GLboolean {
+    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.IsVertexArrayOES(array) })
+}
+
 fn glRenderbufferStorageOES(
     env: &mut Environment,
     target: GLenum,
@@ -1618,6 +1641,10 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(glIsRenderbufferOES(_)),
     export_c_func!(glBindFramebufferOES(_, _)),
     export_c_func!(glBindRenderbufferOES(_, _)),
+    export_c_func!(glGenVertexArraysOES(_, _)),
+    export_c_func!(glDeleteVertexArraysOES(_, _)),
+    export_c_func!(glBindVertexArrayOES(_)),
+    export_c_func!(glIsVertexArrayOES(_)),
     export_c_func!(glRenderbufferStorageOES(_, _, _, _)),
     export_c_func!(glFramebufferRenderbufferOES(_, _, _, _)),
     export_c_func!(glFramebufferTexture2DOES(_, _, _, _, _)),

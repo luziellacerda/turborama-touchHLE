@@ -770,6 +770,24 @@ impl GLES for GLES1Native<'_> {
     unsafe fn BindRenderbufferOES(&mut self, target: GLenum, renderbuffer: GLuint) {
         gles11::BindRenderbufferOES(target, renderbuffer)
     }
+
+    // OES_vertex_array_object: direct passthrough, the underlying driver
+    // implements the real extension (confirmed present in the reported
+    // GLES1 extension string on the same devices touchHLE advertises it to
+    // the guest).
+    unsafe fn GenVertexArraysOES(&mut self, n: GLsizei, arrays: *mut GLuint) {
+        gles11::GenVertexArraysOES(n, arrays)
+    }
+    unsafe fn DeleteVertexArraysOES(&mut self, n: GLsizei, arrays: *const GLuint) {
+        gles11::DeleteVertexArraysOES(n, arrays)
+    }
+    unsafe fn BindVertexArrayOES(&mut self, array: GLuint) {
+        gles11::BindVertexArrayOES(array)
+    }
+    unsafe fn IsVertexArrayOES(&mut self, array: GLuint) -> GLboolean {
+        gles11::IsVertexArrayOES(array)
+    }
+
     unsafe fn RenderbufferStorageOES(
         &mut self,
         target: GLenum,

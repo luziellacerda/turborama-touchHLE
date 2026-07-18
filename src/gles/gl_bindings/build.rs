@@ -47,6 +47,7 @@ fn main() {
             "GL_OES_compressed_paletted_texture",
             "GL_OES_matrix_palette",
             "GL_OES_blend_subtract",
+            "GL_OES_vertex_array_object",
         ],
     )
     .write_bindings(GlobalGenerator, &mut file)

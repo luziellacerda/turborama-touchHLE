@@ -2085,6 +2085,26 @@ impl GLES for GLES1OnGL2<'_> {
     unsafe fn BindRenderbufferOES(&mut self, target: GLenum, renderbuffer: GLuint) {
         gl21::BindRenderbufferEXT(target, renderbuffer)
     }
+
+    // OES_vertex_array_object: not yet implemented for the GLES1-on-GL2
+    // backend (this would need GL_ARB_vertex_array_object / desktop GL 3.0+
+    // core functions, which aren't in the gl21compat bindings this backend
+    // uses). Only reachable if a guest app calls these while running with
+    // --gles1=gles1_on_gl2; the native backend (used by default) has a real
+    // implementation.
+    unsafe fn GenVertexArraysOES(&mut self, _n: GLsizei, _arrays: *mut GLuint) {
+        unimplemented!("GL_OES_vertex_array_object on the gles1_on_gl2 backend")
+    }
+    unsafe fn DeleteVertexArraysOES(&mut self, _n: GLsizei, _arrays: *const GLuint) {
+        unimplemented!("GL_OES_vertex_array_object on the gles1_on_gl2 backend")
+    }
+    unsafe fn BindVertexArrayOES(&mut self, _array: GLuint) {
+        unimplemented!("GL_OES_vertex_array_object on the gles1_on_gl2 backend")
+    }
+    unsafe fn IsVertexArrayOES(&mut self, _array: GLuint) -> GLboolean {
+        unimplemented!("GL_OES_vertex_array_object on the gles1_on_gl2 backend")
+    }
+
     unsafe fn RenderbufferStorageOES(
         &mut self,
         target: GLenum,
