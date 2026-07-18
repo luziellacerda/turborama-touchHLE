@@ -56,6 +56,18 @@ pub const CLASSES: ClassExports = objc_classes! {
     this
 }
 
+// Wraps an arbitrary custom view as a bar button item. touchHLE doesn't
+// actually place the view in the bar (UINavigationBar/UIToolbar are stubs
+// here too), so the view is discarded; returning self just lets
+// construction succeed.
+- (id)initWithCustomView:(id)custom_view { // UIView*
+    log!(
+        "TODO: [(UIBarButtonItem*){:?} initWithCustomView:{:?}] (ignored)",
+        this, custom_view
+    );
+    this
+}
+
 // Nib event connections send this UIControl message to bar button items.
 - (())addTarget:(id)_target
          action:(SEL)_action
