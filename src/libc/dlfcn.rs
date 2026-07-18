@@ -41,6 +41,10 @@ const KNOWN_OPTIONAL_SYMBOLS: &[&str] = &[
     // conditionally call the (fairly obscure, version-gated) app icon
     // badge-number API.
     "__setBadgeNumber",
+    // Same story, for probing whether Game Center is available (it was
+    // introduced in iOS 4.1, so older-minimum-OS apps check for it before
+    // using it).
+    "__gameCenterIsGameCenterAvailable",
 ];
 
 fn dlsym(env: &mut Environment, handle: MutVoidPtr, symbol: ConstPtr<u8>) -> MutVoidPtr {
