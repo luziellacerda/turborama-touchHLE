@@ -76,13 +76,12 @@ fn fake_statfs() -> statfs {
 
 /// Internal helper for `statfs`, not a part of the API.
 pub fn statfs_inner(env: &mut Environment, path: ConstPtr<u8>) -> Result<statfs, i32> {
-    // FIXME does directory matter?
-    assert!(env
-        .mem
-        .cstr_at_utf8(path)
-        .is_ok_and(|path| path.starts_with(env.fs.home_directory().join("Documents").as_str())));
-
-    // TODO: Handle additional errors
+    // Note: unlike open()/write(), statfs() doesn't care whether the path is
+    // actually writable, just that it resolves to something. Callers
+    // (e.g. SQLite's unix VFS, which calls statfs() as part of its file
+    // handling regardless of whether opening for writing succeeded) may
+    // legitimately query paths outside of Documents, such as a path inside
+    // the app's own (read-only) bundle.
     let path = env.mem.cstr_at_utf8(path).unwrap();
     if !env.fs.exists(GuestPath::new(path)) {
         return Err(ENOENT);
