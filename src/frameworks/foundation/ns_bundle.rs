@@ -5,7 +5,7 @@
  */
 //! `NSBundle`.
 
-use super::{ns_string, NSNotFound, NSRange, NSUInteger};
+use super::{ns_array, ns_string, NSNotFound, NSRange, NSUInteger};
 use crate::bundle::Bundle;
 use crate::frameworks::core_foundation::cf_bundle::{
     CFBundleCopyBundleLocalizations, CFBundleCopyPreferredLocalizationsFromArray,
@@ -78,6 +78,15 @@ pub const CLASSES: ClassExports = objc_classes! {
 + (id)preferredLocalizationsFromArray:(id)localizations_array { // NSArray<NSString *> *
     let preferredLocalizations = CFBundleCopyPreferredLocalizationsFromArray(env, localizations_array);
     autorelease(env, preferredLocalizations)
+}
+
+// Some apps call this on the NSBundle class itself rather than on a bundle
+// instance (probably meaning `[[NSBundle mainBundle] ...]`). Forward to the
+// main bundle to accommodate that.
++ (id)pathsForResourcesOfType:(id)extension // NSString*
+                   inDirectory:(id)directory { // NSString*
+    let main_bundle: id = msg_class![env; NSBundle mainBundle];
+    msg![env; main_bundle pathsForResourcesOfType:extension inDirectory:directory]
 }
 
 - (())dealloc {
@@ -205,6 +214,36 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)pathForResource:(id)name // NSString*
                ofType:(id)extension { // NSString*
     msg![env; this pathForResource:name ofType:extension inDirectory:nil]
+}
+- (id)pathsForResourcesOfType:(id)extension // NSString*, without leading dot; nil means "all files"
+                   inDirectory:(id)directory { // NSString*
+    let mut dir_path: id = msg![env; this resourcePath];
+    if directory != nil {
+        dir_path = msg![env; dir_path stringByAppendingPathComponent:directory];
+    }
+    let file_manager: id = msg_class![env; NSFileManager defaultManager];
+    let names: id = msg![env; file_manager directoryContentsAtPath:dir_path];
+    let mut result: Vec<id> = Vec::new();
+    if names != nil {
+        let count: NSUInteger = msg![env; names count];
+        for i in 0..count {
+            let name: id = msg![env; names objectAtIndex:i];
+            if extension != nil {
+                let name_ext: id = msg![env; name pathExtension];
+                let matches: bool = msg![env; name_ext isEqualToString:extension];
+                if !matches {
+                    continue;
+                }
+            }
+            let full_path: id = msg![env; dir_path stringByAppendingPathComponent:name];
+            result.push(full_path);
+        }
+    }
+    for path in &result {
+        retain(env, *path);
+    }
+    let res = ns_array::from_vec(env, result);
+    autorelease(env, res)
 }
 - (id)URLForResource:(id)name // NSString*
        withExtension:(id)extension // NSString *
