@@ -83,6 +83,11 @@ impl_HostIMP!(P1, P2);
 impl_HostIMP!(P1, P2, P3);
 impl_HostIMP!(P1, P2, P3, P4);
 impl_HostIMP!(P1, P2, P3, P4, P5);
+// Added for NSTimer's initWithFireDate:interval:target:selector:userInfo:
+// repeats:, the first host method needing 6 real arguments. The underlying
+// CallFromGuest machinery this trait relies on already goes up to 10
+// parameters (see abi.rs); HostIMP just hadn't been extended that far yet.
+impl_HostIMP!(P1, P2, P3, P4, P5, P6);
 
 /// Type for a guest function implementing a method. See [GuestFunction].
 pub type GuestIMP = GuestFunction;

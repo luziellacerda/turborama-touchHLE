@@ -67,6 +67,13 @@ impl SEL {
     pub fn is_null(self) -> bool {
         self.0.is_null()
     }
+    /// A placeholder selector with no meaningful value. Useful for
+    /// `Default`-style placeholder host objects (e.g. before
+    /// `allocWithZone:`'s result is populated by an `initWith...` method),
+    /// never meant to be sent as an actual message.
+    pub(crate) fn null() -> SEL {
+        SEL(Ptr::null())
+    }
 }
 
 unsafe impl SafeRead for SEL {}

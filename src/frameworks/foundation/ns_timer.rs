@@ -10,7 +10,7 @@ use super::NSTimeInterval;
 use super::{ns_run_loop, ns_string};
 use crate::objc::{
     autorelease, id, msg, msg_class, msg_send, nil, objc_classes, release, retain, ClassExports,
-    HostObject, SEL,
+    HostObject, NSZonePtr, SEL,
 };
 use crate::Environment;
 use std::time::{Duration, Instant};
@@ -34,6 +34,25 @@ struct NSTimerHostObject {
     run_loop: id,
 }
 impl HostObject for NSTimerHostObject {}
+impl Default for NSTimerHostObject {
+    // Only meant as a placeholder immediately after allocWithZone:, to be
+    // fully overwritten by whichever initWith... method runs next. SEL
+    // doesn't implement Default (a selector always has a real name), hence
+    // this manual impl instead of #[derive(Default)].
+    fn default() -> Self {
+        NSTimerHostObject {
+            ns_interval: 0.0,
+            rust_interval: Duration::ZERO,
+            target: nil,
+            selector: SEL::null(),
+            user_info: nil,
+            repeats: false,
+            due_by: None,
+            is_running_callback: false,
+            run_loop: nil,
+        }
+    }
+}
 
 pub const CLASSES: ClassExports = objc_classes! {
 
@@ -41,6 +60,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // NSTimer doesn't seem to be an abstract class?
 @implementation NSTimer: NSObject
+
++ (id)allocWithZone:(NSZonePtr)_zone {
+    let host_object = Box::<NSTimerHostObject>::default();
+    env.objc.alloc_object(this, host_object, &mut env.mem)
+}
 
 + (id)timerWithTimeInterval:(NSTimeInterval)ns_interval
                      target:(id)target
@@ -150,6 +174,58 @@ pub const CLASSES: ClassExports = objc_classes! {
     if !repeats {
         () = msg![env; this invalidate];
     }
+}
+
+- (id)initWithFireDate:(id)fire_date // NSDate*
+               interval:(NSTimeInterval)ns_interval
+                 target:(id)target
+               selector:(SEL)selector
+               userInfo:(id)user_info
+                repeats:(bool)repeats {
+    let ns_interval = ns_interval.max(0.0001);
+    let rust_interval = Duration::from_secs_f64(ns_interval);
+
+    // Unlike timerWithTimeInterval:..., the first firing here is at
+    // fireDate, not necessarily "now + interval".
+    let seconds_until_fire: NSTimeInterval = msg![env; fire_date timeIntervalSinceNow];
+    let due_by = if seconds_until_fire <= 0.0 {
+        // Already due (or fireDate is in the past): fire as soon as
+        // possible, matching real NSTimer's documented behaviour.
+        Instant::now()
+    } else {
+        Instant::now()
+            .checked_add(Duration::from_secs_f64(seconds_until_fire))
+            .unwrap()
+    };
+
+    retain(env, target);
+    retain(env, user_info);
+
+    let host_object = NSTimerHostObject {
+        ns_interval,
+        rust_interval,
+        target,
+        selector,
+        user_info,
+        repeats,
+        due_by: Some(due_by),
+        run_loop: nil,
+        is_running_callback: false,
+    };
+    *env.objc.borrow_mut(this) = host_object;
+
+    log_dbg!(
+        "New {} timer {:?} (via initWithFireDate:), first fire in {}s, then every {}s, target [{:?} {}], user info {:?}",
+        if repeats { "repeating" } else { "single-use" },
+        this,
+        seconds_until_fire.max(0.0),
+        ns_interval,
+        target,
+        selector.as_str(&env.mem),
+        user_info,
+    );
+
+    this
 }
 
 // TODO: more constructors
