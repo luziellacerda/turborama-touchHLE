@@ -43,6 +43,9 @@ regex-lite = "0.1.9"
 mach_object = "0.1.17"
 plist = "1.8.0"
 zip = { version = "0.6.4", default-features = false, features = ["deflate"] }
+# Already pulled in transitively via zip; declared directly so UIImagePNG/
+# JPEGRepresentation can use it for zlib/DEFLATE compression of PNG IDAT data.
+flate2 = "1.0.25"
 rusttype = "0.9.3"
 # Needed so we can access underlying OwnedFace from rusttype
 # (bump version if rusttype is updated!)

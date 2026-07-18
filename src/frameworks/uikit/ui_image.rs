@@ -9,14 +9,17 @@ use crate::frameworks::core_graphics::cg_context::{
     CGBlendMode, CGContextDrawImage, CGContextDrawImageWithBlendModeAndAlpha,
 };
 use crate::frameworks::core_graphics::cg_image::{
-    self, CGImageGetHeight, CGImageGetWidth, CGImageRef, CGImageRelease, CGImageRetain,
+    self, CGImageGetHeight, CGImageGetWidth, CGImageRef, CGImageRelease,
+    CGImageRetain,
 };
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::ns_string::get_static_str;
-use crate::frameworks::foundation::{ns_data, ns_string, NSInteger};
+use crate::frameworks::foundation::{ns_data, ns_string, NSInteger, NSUInteger};
 use crate::frameworks::uikit::ui_graphics::UIGraphicsGetCurrentContext;
+use crate::dyld::{export_c_func, FunctionExports};
 use crate::fs::GuestPath;
 use crate::image::Image;
+use crate::mem::MutVoidPtr;
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
     NSZonePtr,
@@ -246,3 +249,116 @@ pub const CLASSES: ClassExports = objc_classes! {
 @end
 
 };
+
+/// PNG CRC-32 (IEEE 802.3), computed without a lookup table.
+fn png_crc32(data: &[u8]) -> u32 {
+    let mut crc: u32 = 0xFFFF_FFFF;
+    for &byte in data {
+        crc ^= byte as u32;
+        for _ in 0..8 {
+            if crc & 1 != 0 {
+                crc = (crc >> 1) ^ 0xEDB8_8320;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    crc ^ 0xFFFF_FFFF
+}
+
+fn png_write_chunk(out: &mut Vec<u8>, chunk_type: &[u8; 4], data: &[u8]) {
+    out.extend_from_slice(&(data.len() as u32).to_be_bytes());
+    let mut type_and_data = Vec::with_capacity(4 + data.len());
+    type_and_data.extend_from_slice(chunk_type);
+    type_and_data.extend_from_slice(data);
+    out.extend_from_slice(chunk_type);
+    out.extend_from_slice(data);
+    out.extend_from_slice(&png_crc32(&type_and_data).to_be_bytes());
+}
+
+/// Minimal PNG encoder for 8-bit RGBA. `rgba` must be `width * height * 4`
+/// bytes, top-to-bottom rows, with *straight* (non-premultiplied) alpha.
+fn encode_png_rgba(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
+    use flate2::write::ZlibEncoder;
+    use flate2::Compression;
+    use std::io::Write;
+
+    let mut out = Vec::new();
+    out.extend_from_slice(&[137, 80, 78, 71, 13, 10, 26, 10]); // signature
+
+    // IHDR: 8-bit depth, color type 6 (truecolour with alpha), no interlace.
+    let mut ihdr = Vec::with_capacity(13);
+    ihdr.extend_from_slice(&width.to_be_bytes());
+    ihdr.extend_from_slice(&height.to_be_bytes());
+    ihdr.push(8);
+    ihdr.push(6);
+    ihdr.push(0);
+    ihdr.push(0);
+    ihdr.push(0);
+    png_write_chunk(&mut out, b"IHDR", &ihdr);
+
+    // IDAT: each scanline prefixed with a filter-type byte (0 = None), then
+    // the whole thing zlib-compressed.
+    let row_bytes = (width * 4) as usize;
+    let mut raw = Vec::with_capacity((row_bytes + 1) * height as usize);
+    for y in 0..height as usize {
+        raw.push(0);
+        raw.extend_from_slice(&rgba[y * row_bytes..(y + 1) * row_bytes]);
+    }
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(&raw).unwrap();
+    let compressed = encoder.finish().unwrap();
+    png_write_chunk(&mut out, b"IDAT", &compressed);
+
+    png_write_chunk(&mut out, b"IEND", &[]);
+    out
+}
+
+/// `UIImagePNGRepresentation(UIImage *image)` -> `NSData *`
+fn UIImagePNGRepresentation(env: &mut Environment, image: id) -> id {
+    if image == nil {
+        return nil;
+    }
+    let cg_image = env.objc.borrow::<UIImageHostObject>(image).cg_image;
+    if cg_image == nil {
+        return nil;
+    }
+
+    // Read pixels back. Image::pixels() is 8-bit RGBA with *premultiplied*
+    // alpha; PNG expects straight alpha, so unpremultiply first.
+    let (width, height, straight) = {
+        let img = cg_image::borrow_image(&env.objc, cg_image);
+        let (w, h) = img.dimensions();
+        let premul = img.pixels();
+        let mut straight = Vec::with_capacity(premul.len());
+        let mut i = 0;
+        while i < premul.len() {
+            let a = premul[i + 3];
+            if a == 0 {
+                straight.extend_from_slice(&[0, 0, 0, 0]);
+            } else {
+                let unpre = |c: u8| ((c as u32 * 255 + (a as u32 / 2)) / a as u32).min(255) as u8;
+                straight.push(unpre(premul[i]));
+                straight.push(unpre(premul[i + 1]));
+                straight.push(unpre(premul[i + 2]));
+                straight.push(a);
+            }
+            i += 4;
+        }
+        (w, h, straight)
+    };
+
+    let png = encode_png_rgba(&straight, width, height);
+
+    // Hand the bytes to a fresh NSData (copying into guest memory).
+    let length: NSUInteger = png.len().try_into().unwrap();
+    let alloc: MutVoidPtr = env.mem.alloc(length);
+    env.mem
+        .bytes_at_mut(alloc.cast(), length)
+        .copy_from_slice(&png);
+    let data: id = msg_class![env; NSData dataWithBytesNoCopy:alloc
+                                                       length:length];
+    data
+}
+
+pub const FUNCTIONS: FunctionExports = &[export_c_func!(UIImagePNGRepresentation(_))];
