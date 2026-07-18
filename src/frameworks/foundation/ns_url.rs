@@ -34,6 +34,43 @@ enum NSURLHostObject {
 }
 impl HostObject for NSURLHostObject {}
 
+/// Extract the filesystem path from a `file:` URL string, with
+/// percent-decoding. Handles the forms `file:///path`,
+/// `file://host/path` (host is ignored, like `localhost`) and `file:/path`
+/// (RFC 8089). Returns [None] if the string doesn't have a `file:` scheme.
+fn file_url_to_path(url_string: &str) -> Option<String> {
+    // URL schemes are case-insensitive.
+    if url_string.len() < 5 || !url_string[..5].eq_ignore_ascii_case("file:") {
+        return None;
+    }
+    let rest = &url_string[5..];
+    let path = if let Some(after_slashes) = rest.strip_prefix("//") {
+        // Skip the authority component (e.g. "localhost") up to the next '/'.
+        match after_slashes.find('/') {
+            Some(idx) => &after_slashes[idx..],
+            None => "/",
+        }
+    } else {
+        rest
+    };
+    // Percent-decoding (e.g. "%20" => " ").
+    let bytes = path.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(byte) = u8::from_str_radix(&path[i + 1..i + 3], 16) {
+                decoded.push(byte);
+                i += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[i]);
+        i += 1;
+    }
+    Some(String::from_utf8_lossy(&decoded).into_owned())
+}
+
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
@@ -85,8 +122,15 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)initFileURLWithPath:(id)path // NSString*
               isDirectory:(bool)_is_dir {
     // FIXME: this does not resolve relative paths to be absolute!
-    // TODO: this does not strip the file:/// prefix!
-    assert!(!to_rust_string(env, path).starts_with("file:"));
+    // Some apps pass file: URL strings where a plain path is expected;
+    // strip the scheme and authority in that case.
+    let path_string = to_rust_string(env, path).to_string();
+    let path = if let Some(stripped) = file_url_to_path(&path_string) {
+        let stripped = from_rust_string(env, stripped);
+        autorelease(env, stripped)
+    } else {
+        path
+    };
     let path = msg![env; path stringByExpandingTildeInPath];
     let path: id = msg![env; path copy];
     *env.objc.borrow_mut(this) = NSURLHostObject::FileURL { ns_string: path, working_directory: env.fs.working_directory().into() };
@@ -98,8 +142,23 @@ pub const CLASSES: ClassExports = objc_classes! {
         return nil;
     }
 
-    // FIXME: this should parse the URL
-    assert!(!to_rust_string(env, url).starts_with("file:")); // TODO
+    // A file: URL string must become a file URL (see NSURLHostObject),
+    // so that isFileURL, path etc. behave correctly.
+    let url_string = to_rust_string(env, url).to_string();
+    if let Some(path) = file_url_to_path(&url_string) {
+        log_dbg!(
+            "[(NSURL*){:?} initWithString:{:?}]: parsed file URL {:?} as path {:?}",
+            this,
+            url,
+            url_string,
+            path
+        );
+        let path = from_rust_string(env, path);
+        let path = autorelease(env, path);
+        return msg![env; this initFileURLWithPath:path];
+    }
+
+    // FIXME: this should parse other URL schemes properly
     let url: id = msg![env; url copy];
     *env.objc.borrow_mut(this) = NSURLHostObject::OtherURL { ns_string: url };
     this
