@@ -18,8 +18,21 @@ use crate::environment::{MutexId, ThreadBlock, ThreadId};
 use crate::libc::time::timespec;
 
 #[repr(C, packed)]
-pub struct pthread_condattr_t {}
+pub struct pthread_condattr_t {
+    magic: u32,
+    // TODO: process-shared support, if it's ever needed. There is only one
+    // attribute to store (pshared), and touchHLE doesn't support multiple
+    // processes, so for now there's nothing to actually put in this struct
+    // beyond the magic number.
+}
 unsafe impl SafeRead for pthread_condattr_t {}
+
+/// Arbitrarily-chosen magic number for `pthread_condattr_t` (not Apple's).
+const MAGIC_CONDATTR: u32 = u32::from_be_bytes(*b"CoAt");
+
+#[allow(dead_code)]
+const PTHREAD_PROCESS_SHARED: i32 = 1;
+const PTHREAD_PROCESS_PRIVATE: i32 = 2;
 
 /// Arbitrarily-chosen magic number for `pthread_cond_t` (not Apple's).
 const MAGIC_COND: u32 = u32::from_be_bytes(*b"COND");
@@ -54,6 +67,28 @@ pub struct CondHostObject {
     pub(crate) waking: VecDeque<ThreadId>,
     pub(crate) curr_mutex: Option<MutexId>,
     pub(crate) timed_out: HashSet<ThreadId>,
+}
+
+fn pthread_condattr_init(env: &mut Environment, attr: MutPtr<pthread_condattr_t>) -> i32 {
+    env.mem.write(attr, pthread_condattr_t { magic: MAGIC_CONDATTR });
+    0 // success
+}
+fn pthread_condattr_setpshared(
+    env: &mut Environment,
+    attr: MutPtr<pthread_condattr_t>,
+    pshared: i32,
+) -> i32 {
+    check_magic!(env, attr, MAGIC_CONDATTR);
+    // PTHREAD_PROCESS_PRIVATE is the only mode touchHLE supports (there's
+    // only ever one process), so this is a no-op beyond validating the
+    // argument.
+    assert_eq!(pshared, PTHREAD_PROCESS_PRIVATE);
+    0 // success
+}
+fn pthread_condattr_destroy(env: &mut Environment, attr: MutPtr<pthread_condattr_t>) -> i32 {
+    check_magic!(env, attr, MAGIC_CONDATTR);
+    env.mem.write(attr, pthread_condattr_t { magic: 0 });
+    0 // success
 }
 
 pub fn pthread_cond_init(
@@ -289,6 +324,9 @@ pub fn pthread_cond_destroy(env: &mut Environment, cond: MutPtr<pthread_cond_t>)
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(pthread_condattr_init(_)),
+    export_c_func!(pthread_condattr_setpshared(_, _)),
+    export_c_func!(pthread_condattr_destroy(_)),
     export_c_func!(pthread_cond_init(_, _)),
     export_c_func!(pthread_cond_wait(_, _)),
     export_c_func!(pthread_cond_timedwait(_, _, _)),
