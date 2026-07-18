@@ -56,6 +56,22 @@ pub const CLASSES: ClassExports = objc_classes! {
     this
 }
 
+// Programmatic construction from an image (e.g. an icon from the app
+// bundle), used among others by ad frameworks like Greystripe when
+// building their navigation bars in code. Like the other initializers
+// here, image, style, target and action are all ignored: touchHLE
+// doesn't render bar button items or wire up their taps.
+- (id)initWithImage:(id)_image // UIImage*
+              style:(NSInteger)_style // UIBarButtonItemStyle
+             target:(id)_target
+             action:(SEL)_action {
+    log!(
+        "TODO: [(UIBarButtonItem*){:?} initWithImage:style:target:action:] (ignored)",
+        this
+    );
+    this
+}
+
 // Wraps an arbitrary custom view as a bar button item. touchHLE doesn't
 // actually place the view in the bar (UINavigationBar/UIToolbar are stubs
 // here too), so the view is discarded; returning self just lets
