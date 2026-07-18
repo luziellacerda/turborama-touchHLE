@@ -538,6 +538,35 @@ pub const CLASSES: ClassExports = objc_classes! {
     msg![env; this objectForKey:file_type_key]
 }
 
+// NSEnumerator support. These are implemented generically here (rather than
+// per-subclass) in terms of allKeys/objectForKey:, which every concrete
+// subclass provides, so any subclass gets a working enumerator for free.
+// Subclasses remain free to override these with a more direct
+// implementation.
+- (id)keyEnumerator { // NSEnumerator*
+    let keys: id = msg![env; this allKeys];
+    msg![env; keys objectEnumerator]
+}
+- (id)allValues {
+    let keys: id = msg![env; this allKeys];
+    let count: NSUInteger = msg![env; keys count];
+    let mut values: Vec<id> = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let key: id = msg![env; keys objectAtIndex:i];
+        let value: id = msg![env; this objectForKey:key];
+        values.push(value);
+    }
+    for value in &values {
+        retain(env, *value);
+    }
+    let res = ns_array::from_vec(env, values);
+    autorelease(env, res)
+}
+- (id)objectEnumerator { // NSEnumerator*
+    let values: id = msg![env; this allValues];
+    msg![env; values objectEnumerator]
+}
+
 @end
 
 // NSMutableDictionary is an abstract class. A subclass must provide everything
