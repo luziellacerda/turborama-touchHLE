@@ -46,8 +46,8 @@ pub use selectors::{selector, SEL};
 use crate::mem::ConstVoidPtr;
 use crate::Environment;
 use classes::{
-    class_getInstanceSize, class_getProperty, class_getSuperclass, objc_getClass, ClassHostObject,
-    FakeClass, UnimplementedClass,
+    class_getInstanceMethod, class_getInstanceSize, class_getProperty, class_getSuperclass,
+    method_getImplementation, objc_getClass, ClassHostObject, FakeClass, UnimplementedClass,
 };
 pub(crate) use messages::objc_msgSend;
 use messages::{objc_msgSendSuper2, objc_msgSend_stret, MsgSendSignature, MsgSendSuperSignature};
@@ -88,6 +88,11 @@ pub struct ObjC {
     /// Type information isn't part of the `objc_msgSend` ABI, so an alternative
     /// channel is needed.
     message_type_info: Option<(std::any::TypeId, &'static str)>,
+
+    /// Cache of `Method` structs allocated on demand for
+    /// `class_getInstanceMethod()`, keyed by (class, selector), so repeated
+    /// queries return a stable pointer.
+    method_cache: HashMap<(Class, SEL), classes::Method>,
 }
 
 impl ObjC {
@@ -99,6 +104,7 @@ impl ObjC {
             sync_mutexes: HashMap::new(),
             initializer_threads: HashMap::new(),
             message_type_info: None,
+            method_cache: HashMap::new(),
         }
     }
 }
@@ -138,6 +144,8 @@ const FUNCTIONS: FunctionExports = &[
     export_c_func!(class_getInstanceSize(_)),
     export_c_func!(class_getSuperclass(_)),
     export_c_func!(class_getProperty(_, _)),
+    export_c_func!(class_getInstanceMethod(_, _)),
+    export_c_func!(method_getImplementation(_)),
     export_c_func!(objc_msgSend(_, _)),
     export_c_func!(objc_msgSend_stret(_, _, _)),
     export_c_func!(objc_msgSendSuper2(_, _)),

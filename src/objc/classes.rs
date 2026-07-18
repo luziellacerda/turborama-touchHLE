@@ -15,7 +15,10 @@ use super::{
     IMP, SEL,
 };
 use crate::mach_o::MachO;
-use crate::mem::{guest_size_of, ConstPtr, ConstVoidPtr, GuestUSize, Mem, MutPtr, Ptr, SafeRead};
+use crate::abi::GuestFunction;
+use crate::mem::{
+    guest_size_of, ConstPtr, ConstVoidPtr, GuestUSize, Mem, MutPtr, MutVoidPtr, Ptr, SafeRead,
+};
 use crate::Environment;
 use std::collections::{HashMap, VecDeque};
 
@@ -1032,6 +1035,77 @@ pub(super) fn objc_getClass(env: &mut Environment, name: ConstPtr<u8>) -> id {
     env.objc
         .get_class(name_str, false, &env.mem)
         .unwrap_or_else(|| panic!("objc_getClass() for unimplemented class {name_str}"))
+}
+
+/// Guest-visible layout of a `Method` (`<objc/runtime.h>`), matching the
+/// classic 32-bit Objective-C runtime's ABI. touchHLE allocates one of these
+/// per (class, selector) pair the guest asks about, the first time it's
+/// asked, and caches the pointer so repeat queries return the same address
+/// (some code compares `Method` pointers for equality).
+#[allow(non_camel_case_types)]
+#[repr(C, packed)]
+pub(super) struct objc_method_struct {
+    method_name: SEL,
+    method_types: ConstPtr<u8>,
+    /// Always a real guest-callable address: for a guest-implemented method
+    /// this is the method's own code, and for a host-implemented one it's an
+    /// SVC trampoline minted on demand (see [ObjC::lookup_method_imp]).
+    method_imp: GuestFunction,
+}
+unsafe impl SafeRead for objc_method_struct {}
+
+/// `Method`, see [objc_method_struct].
+pub(super) type Method = MutPtr<objc_method_struct>;
+
+pub(super) fn class_getInstanceMethod(env: &mut Environment, cls: Class, sel: SEL) -> Method {
+    if cls == nil {
+        return Ptr::null();
+    }
+    if let Some(&cached) = env.objc.method_cache.get(&(cls, sel)) {
+        return cached;
+    }
+    let Some(imp) = env.objc.lookup_method_imp(cls, sel) else {
+        return Ptr::null();
+    };
+    let method_imp = match imp {
+        IMP::Guest(guest_function) => guest_function,
+        IMP::Host(host_imp) => {
+            let symbol: &'static str = Box::leak(
+                format!("__touchHLE_IMP_{}", sel.as_str(&env.mem)).into_boxed_str(),
+            );
+            let hf: crate::dyld::HostFunction = host_imp;
+            env.dyld.create_guest_function(&mut env.mem, symbol, hf)
+        }
+    };
+    let method_types = env
+        .objc
+        .class_get_method_signature(cls, sel)
+        .copied()
+        .unwrap_or(Ptr::null());
+
+    let method: Method = env.mem.alloc(guest_size_of::<objc_method_struct>()).cast();
+    env.mem.write(
+        method,
+        objc_method_struct {
+            method_name: sel,
+            method_types,
+            method_imp,
+        },
+    );
+    env.objc.method_cache.insert((cls, sel), method);
+    method
+}
+
+/// Companion to [class_getInstanceMethod]: extracts the callable function
+/// pointer from a `Method`. Note the real signature returns `IMP`, but
+/// touchHLE has no guest-ABI return type for that, so `MutVoidPtr` (the same
+/// bit pattern) is used instead, matching `-methodForSelector:`.
+pub(super) fn method_getImplementation(env: &mut Environment, method: Method) -> MutVoidPtr {
+    if method.is_null() {
+        return Ptr::null();
+    }
+    let objc_method_struct { method_imp, .. } = env.mem.read(method.cast_const());
+    Ptr::from_bits(method_imp.addr_with_thumb_bit())
 }
 
 pub(super) fn class_getSuperclass(env: &mut Environment, cls: Class) -> Class {
