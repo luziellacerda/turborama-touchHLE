@@ -93,6 +93,28 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (id)initWithContentURL:(id)url { // NSURL*
+    // Game-specific hack: The Quest (com.chillingo.thequest) starts playing
+    // its intro "stinger" movie and immediately embeds the player's view
+    // into `[[[UIApplication sharedApplication] windows] objectAtIndex:0]`,
+    // before the app has created its main UIWindow (touchHLE's nib-loading
+    // order matches real iOS here, but this app apparently builds its window
+    // later, in code that only runs after the movie "finishes"). Since
+    // touchHLE cannot really play the movie's video anyway, the least
+    // disruptive fix is to make this init fail gracefully (as Cocoa
+    // convention dictates: release self, return nil), the same way it would
+    // on a device that couldn't load the file for some other reason. This
+    // app's own code checks the result before calling `play`/embedding the
+    // view, so a nil here makes it skip straight past the intro instead of
+    // crashing on the not-yet-existent window.
+    if env.bundle.bundle_identifier() == "com.chillingo.thequest" {
+        log!(
+            "Applying game-specific hack for {:?}: pretending the intro movie failed to load, to avoid a crash caused by the app accessing its main window before creating it.",
+            env.bundle.bundle_identifier()
+        );
+        release(env, this);
+        return nil;
+    }
+
     log!(
         "TODO: [(MPMoviePlayerController*){:?} initWithContentURL:{:?} ({:?})]",
         this,
