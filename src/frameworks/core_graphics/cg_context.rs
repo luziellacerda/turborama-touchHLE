@@ -80,6 +80,11 @@ pub(super) struct CGContextHostObject {
     /// Not currently included in CGContextSaveGState/RestoreGState state,
     /// matching rgb_stroke_color above (which also isn't).
     pub(super) line_width: CGFloat,
+    /// Current path under construction. Each element is a subpath: its
+    /// points (in user space, as given to CGContextMoveToPoint /
+    /// CGContextAddLineToPoint) plus whether CGContextClosePath was called
+    /// on it. Cleared by CGContextBeginPath.
+    pub(super) path: Vec<(Vec<CGPoint>, bool)>,
     pub(super) font: CGFontRef,
     pub(super) font_size: CGFloat,
     /// Current transform.
