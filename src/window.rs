@@ -542,6 +542,41 @@ impl Window {
                 _ => {}
             }
 
+            // Software mouse cursor. Some display drivers used on embedded
+            // Linux (e.g. SDL's KMSDRM backend without a hardware cursor
+            // plane, common on Amlogic/Mali setups) never render the OS
+            // mouse cursor at all, making mouse-driven apps unusable. This
+            // reuses the on-screen cursor sprite and rendering path that
+            // already exists for the game-controller-driven virtual cursor.
+            // Note: if both a controller and mouse are used together with
+            // --stabilize-virtual-cursor active, the controller's smoothing
+            // state can briefly override the mouse-drawn position; this is a
+            // rare combination and not worth extra complexity to avoid.
+            match event {
+                E::MouseMotion {
+                    x, y, mousestate, ..
+                } => {
+                    self.virtual_cursor_last = Some((x as f32, y as f32, mousestate.left(), true));
+                }
+                E::MouseButtonDown {
+                    x,
+                    y,
+                    mouse_btn: MouseButton::Left,
+                    ..
+                } => {
+                    self.virtual_cursor_last = Some((x as f32, y as f32, true, true));
+                }
+                E::MouseButtonUp {
+                    x,
+                    y,
+                    mouse_btn: MouseButton::Left,
+                    ..
+                } => {
+                    self.virtual_cursor_last = Some((x as f32, y as f32, false, true));
+                }
+                _ => {}
+            }
+
             self.event_queue.push_back(match event {
                 E::Quit { .. } => Event::Quit,
                 E::MouseButtonDown {
@@ -999,8 +1034,9 @@ impl Window {
     }
 
     /// For use when redrawing the screen: Get the cached on-screen position and
-    /// press state of the analog stick-controlled virtual cursor, if it is
-    /// visible.
+    /// press state of the virtual cursor (driven by a game controller's
+    /// analog stick, or by the mouse as a fallback for display drivers that
+    /// can't render a hardware cursor), if it is visible.
     pub fn virtual_cursor_visible_at(&self) -> Option<(f32, f32, bool)> {
         let (x, y, pressed, visible) = self.virtual_cursor_last?;
         if visible {
