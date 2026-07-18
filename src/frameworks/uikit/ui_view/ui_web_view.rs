@@ -27,6 +27,9 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())setDelegate:(id)_delegate {
     // TODO
 }
+- (())setDetectsPhoneNumbers:(bool)_detects {
+    // TODO
+}
 - (())loadRequest:(id)request { // NSURLRequest*
     let url_string = if request != nil {
         let url = msg![env; request URL];
