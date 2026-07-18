@@ -33,6 +33,7 @@ pub mod net;
 pub mod netdb;
 pub mod posix_io;
 pub mod pthread;
+pub mod regex;
 pub mod sched;
 pub mod semaphore;
 pub mod setjmp;
@@ -90,6 +91,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         pthread::mutex::FUNCTIONS,
         pthread::once::FUNCTIONS,
         pthread::thread::FUNCTIONS,
+        regex::FUNCTIONS,
         sched::FUNCTIONS,
         semaphore::FUNCTIONS,
         setjmp::FUNCTIONS,
@@ -121,6 +123,7 @@ pub struct State {
     math: math::State,
     posix_io: posix_io::State,
     pub pthread: pthread::State,
+    regex: regex::State,
     pub semaphore: semaphore::State,
     pub socket: sys::socket::State,
     stdlib: stdlib::State,
