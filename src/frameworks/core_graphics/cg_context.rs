@@ -77,6 +77,9 @@ pub(super) struct CGContextHostObject {
     pub(super) subclass: CGContextSubclass,
     pub(super) rgb_fill_color: (CGFloat, CGFloat, CGFloat, CGFloat),
     pub(super) rgb_stroke_color: (CGFloat, CGFloat, CGFloat, CGFloat),
+    /// Not currently included in CGContextSaveGState/RestoreGState state,
+    /// matching rgb_stroke_color above (which also isn't).
+    pub(super) line_width: CGFloat,
     pub(super) font: CGFontRef,
     pub(super) font_size: CGFloat,
     /// Current transform.
@@ -199,6 +202,12 @@ fn CGContextSetShadowWithColor(
 
 pub fn CGContextFillRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
     cg_bitmap_context::fill_rect(env, context, rect, /* clear: */ false);
+}
+
+pub fn CGContextSetLineWidth(env: &mut Environment, context: CGContextRef, width: CGFloat) {
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .line_width = width;
 }
 
 pub fn CGContextStrokeRectWithWidth(
@@ -526,6 +535,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextSetGrayFillColor(_, _, _)),
     export_c_func!(CGContextSetGrayStrokeColor(_, _, _)),
     export_c_func!(CGContextSetRGBStrokeColor(_, _, _, _, _)),
+    export_c_func!(CGContextSetLineWidth(_, _)),
     export_c_func!(CGContextSetShadowWithColor(_, _, _, _)),
     export_c_func!(CGContextFillRect(_, _)),
     export_c_func!(CGContextStrokeRectWithWidth(_, _, _)),
