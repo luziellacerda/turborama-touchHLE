@@ -19,11 +19,44 @@ use super::{NSTimeInterval, NSUInteger};
 use crate::frameworks::foundation::ns_run_loop::{add_perform_request, cancel_perform_requests};
 use crate::frameworks::foundation::ns_thread::detach_new_thread_inner;
 use crate::libc::semaphore::{host_destroy_semaphore, sem_wait};
-use crate::mem::MutVoidPtr;
+use crate::mem::{MutVoidPtr, Ptr};
 use crate::objc::{
     autorelease, id, msg, msg_class, msg_send, msg_send_no_type_checking, nil, objc_classes,
-    retain, Class, ClassExports, NSZonePtr, ObjC, TrivialHostObject, SEL,
+    retain, Class, ClassExports, NSZonePtr, ObjC, TrivialHostObject, IMP, SEL,
 };
+use crate::Environment;
+
+/// Shared implementation of `methodForSelector:` and
+/// `instanceMethodForSelector:`: returns a function pointer (`IMP`) that
+/// guest code can call directly. Used e.g. by cocos2d's CCTimer to cache the
+/// IMP of its callback.
+fn method_imp_as_function_pointer(
+    env: &mut Environment,
+    class: Class,
+    selector: SEL,
+) -> MutVoidPtr {
+    let Some(imp) = env.objc.lookup_method_imp(class, selector) else {
+        panic!(
+            "methodForSelector: {:?} not found on class {:?}",
+            selector.as_str(&env.mem),
+            class
+        );
+    };
+    match imp {
+        IMP::Guest(guest_function) => Ptr::from_bits(guest_function.addr_with_thumb_bit()),
+        IMP::Host(host_imp) => {
+            // Mint a guest-callable SVC stub for the host function. The ABI
+            // matches: an IMP takes (self, _cmd, ...) just like the host
+            // method implementation expects.
+            let symbol: &'static str = Box::leak(
+                format!("__touchHLE_IMP_{}", selector.as_str(&env.mem)).into_boxed_str(),
+            );
+            let hf: crate::dyld::HostFunction = host_imp;
+            let guest_function = env.dyld.create_guest_function(&mut env.mem, symbol, hf);
+            Ptr::from_bits(guest_function.addr_with_thumb_bit())
+        }
+    }
+}
 
 pub const CLASSES: ClassExports = objc_classes! {
 
@@ -85,6 +118,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     msg![env; this description]
 }
 
++ (MutVoidPtr)instanceMethodForSelector:(SEL)selector {
+    // `this` is the class object; its method table holds instance methods.
+    method_imp_as_function_pointer(env, this, selector)
+}
+
 + (id)instanceMethodSignatureForSelector:(SEL)sel {
     // TODO: support `host` method signatures
     let sig = *env.objc.class_get_method_signature(this, sel).unwrap();
@@ -94,6 +132,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 + (())initialize {
     // Do nothing
+}
+
+- (MutVoidPtr)methodForSelector:(SEL)selector {
+    let class = ObjC::read_isa(this, &env.mem);
+    method_imp_as_function_pointer(env, class, selector)
 }
 
 - (id)init {

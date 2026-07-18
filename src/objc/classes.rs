@@ -497,6 +497,29 @@ fn substitute_classes(
 }
 
 impl ObjC {
+    /// Walk the superclass chain of `class` and return the [IMP] for
+    /// `selector`, if any. This is the lookup used by `methodForSelector:`
+    /// and `instanceMethodForSelector:` (in the latter case, `class` is the
+    /// class object itself, whose method table holds the instance methods).
+    pub fn lookup_method_imp(&self, class: Class, selector: SEL) -> Option<IMP> {
+        let mut class = class;
+        loop {
+            if class == nil {
+                return None;
+            }
+            let host_object = self.get_host_object(class)?;
+            let &ClassHostObject {
+                superclass,
+                ref methods,
+                ..
+            } = host_object.as_any().downcast_ref()?;
+            if let Some(&imp) = methods.get(&selector) {
+                return Some(imp);
+            }
+            class = superclass;
+        }
+    }
+
     /// Iterator over all known classes and their names.
     pub fn all_classes(&self) -> impl Iterator<Item = (&String, &Class)> {
         self.classes.iter()
