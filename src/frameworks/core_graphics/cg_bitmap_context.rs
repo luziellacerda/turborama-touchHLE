@@ -91,6 +91,7 @@ pub fn CGBitmapContextCreate(
         // This default (1 point) is documented for CGContextSetLineWidth().
         line_width: 1.0,
         path: Vec::new(),
+        clip_rect: None,
         font: Ptr::null(),
         font_size: 14.0,
         transform: CGAffineTransformIdentity,
@@ -419,6 +420,8 @@ pub struct CGBitmapContextDrawer<'a> {
     rgb_fill_color: (CGFloat, CGFloat, CGFloat, CGFloat),
     blend_mode: CGBlendMode,
     transform: CGAffineTransform,
+    /// See CGContextHostObject::clip_rect. Already in device space.
+    clip_rect: Option<CGRect>,
     pixels: &'a mut [u8],
 }
 impl CGBitmapContextDrawer<'_> {
@@ -432,6 +435,7 @@ impl CGBitmapContextDrawer<'_> {
             rgb_fill_color,
             transform,
             blend_mode,
+            clip_rect,
             ..
         } = objc.borrow(context);
 
@@ -442,6 +446,7 @@ impl CGBitmapContextDrawer<'_> {
             rgb_fill_color,
             blend_mode,
             transform,
+            clip_rect,
             pixels,
         }
     }
@@ -478,6 +483,19 @@ impl CGBitmapContextDrawer<'_> {
         color: (CGFloat, CGFloat, CGFloat, CGFloat),
         blend: bool,
     ) {
+        if let Some(clip_rect) = self.clip_rect {
+            let (x, y) = coords;
+            // Pixel centres, matching how callers already sample at `+0.5`
+            // when building coords from user-space geometry.
+            let (cx, cy) = (x as f32 + 0.5, y as f32 + 0.5);
+            let outside = cx < clip_rect.origin.x
+                || cy < clip_rect.origin.y
+                || cx >= clip_rect.origin.x + clip_rect.size.width
+                || cy >= clip_rect.origin.y + clip_rect.size.height;
+            if outside {
+                return;
+            }
+        }
         put_pixel(
             &self.bitmap_info,
             self.pixels,

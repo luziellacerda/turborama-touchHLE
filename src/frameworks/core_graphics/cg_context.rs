@@ -6,15 +6,12 @@
 //! `CGContext.h`
 
 use super::cg_affine_transform::{CGAffineTransform, CGAffineTransformIdentity};
-use super::cg_bitmap_context::{
-    CGBitmapContextDrawer, CGBitmapContextGetHeight, CGBitmapContextGetWidth,
-};
+use super::cg_bitmap_context::CGBitmapContextDrawer;
 use super::cg_color::CGColorRef;
 use super::cg_color_space::{
     kCGColorSpaceModelMonochrome, kCGColorSpaceModelRGB, CGColorSpaceGetModel, CGColorSpaceRef,
 };
 use super::cg_font::{CGFontHostObject, CGFontRef, CGFontRelease, CGFontRetain, CGGlyph};
-use super::cg_geometry::CGPointZero;
 use super::cg_image::CGImageRef;
 use super::{cg_bitmap_context, cg_color, CGFloat, CGPoint, CGRect, CGSize};
 use crate::dyld::{export_c_func, FunctionExports};
@@ -71,6 +68,7 @@ type ContextState = (
     CGFontRef,                            // font
     CGFloat,                              // font size
     CGBlendMode,                          // blend mode
+    Option<CGRect>,                       // clip rect
 );
 
 pub(super) struct CGContextHostObject {
@@ -85,6 +83,15 @@ pub(super) struct CGContextHostObject {
     /// CGContextAddLineToPoint) plus whether CGContextClosePath was called
     /// on it. Cleared by CGContextBeginPath.
     pub(super) path: Vec<(Vec<CGPoint>, bool)>,
+    /// The current clip region, as an axis-aligned rectangle in device
+    /// space. `None` means unclipped (the whole bitmap). Only rectangular
+    /// clips under an identity transform are supported (see
+    /// CGContextClipToRect); anything else isn't representable here.
+    /// Unlike line_width/rgb_stroke_color, this *is* included in
+    /// CGContextSaveGState/RestoreGState, since clip-then-restore is a very
+    /// common pairing and leaving a stale clip in place after a restore
+    /// would be a worse bug than not saving line_width/rgb_stroke_color is.
+    pub(super) clip_rect: Option<CGRect>,
     pub(super) font: CGFontRef,
     pub(super) font_size: CGFloat,
     /// Current transform.
@@ -296,19 +303,41 @@ pub fn CGContextClearRect(env: &mut Environment, context: CGContextRef, rect: CG
 }
 
 pub(super) fn CGContextClipToRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
-    if rect.origin == CGPointZero
-        && rect.size.height == CGBitmapContextGetHeight(env, context) as f32
-        && rect.size.width == CGBitmapContextGetWidth(env, context) as f32
-    {
-        assert!(env
-            .objc
-            .borrow_mut::<CGContextHostObject>(context)
-            .transform
-            .is_identity());
-        // All good, clipping is not needed!
-        return;
+    let host_obj = env.objc.borrow::<CGContextHostObject>(context);
+    // TODO: support clipping under a non-identity transform. Since the
+    // clip is stored in device space (see CGContextHostObject::clip_rect),
+    // a rotated/skewed transform would turn the rect into a non-rectangular
+    // shape in device space, which isn't representable here.
+    assert!(host_obj.transform.is_identity());
+
+    // CGContextClipToRect() intersects with whatever clip is already in
+    // effect; it doesn't replace it.
+    let new_clip_rect = match host_obj.clip_rect {
+        Some(existing) => intersect_rects(existing, rect),
+        None => rect,
+    };
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .clip_rect = Some(new_clip_rect);
+}
+
+fn intersect_rects(a: CGRect, b: CGRect) -> CGRect {
+    let min_x = a.origin.x.max(b.origin.x);
+    let min_y = a.origin.y.max(b.origin.y);
+    let max_x = (a.origin.x + a.size.width).min(b.origin.x + b.size.width);
+    let max_y = (a.origin.y + a.size.height).min(b.origin.y + b.size.height);
+    CGRect {
+        origin: CGPoint {
+            x: min_x,
+            y: min_y,
+        },
+        size: CGSize {
+            // A disjoint intersection becomes a zero-size rect (clips out
+            // everything) rather than a negative size.
+            width: (max_x - min_x).max(0.0),
+            height: (max_y - min_y).max(0.0),
+        },
     }
-    todo!();
 }
 
 pub fn CGContextConcatCTM(
@@ -383,6 +412,7 @@ fn CGContextSaveGState(env: &mut Environment, context: CGContextRef) {
         host_obj.font,
         host_obj.font_size,
         host_obj.blend_mode,
+        host_obj.clip_rect,
     ));
     CGFontRetain(env, env.objc.borrow::<CGContextHostObject>(context).font);
 }
@@ -401,6 +431,7 @@ fn CGContextRestoreGState(env: &mut Environment, context: CGContextRef) {
     host_obj.font = state.2;
     host_obj.font_size = state.3;
     host_obj.blend_mode = state.4;
+    host_obj.clip_rect = state.5;
 }
 
 fn CGContextSetInterpolationQuality(

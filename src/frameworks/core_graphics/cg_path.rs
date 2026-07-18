@@ -57,18 +57,15 @@ fn CGContextClosePath(env: &mut Environment, context: CGContextRef) {
     }
 }
 
-// touchHLE has no real clip-region implementation (see the TODO on
-// CGContextClipToRect). Real CGContextClip() intersects the current clip
-// with the exact shape of the current path (any shape, using the
-// nonzero-winding rule), which touchHLE can't do. What's implemented here
-// is an approximation that's still correct for the common trivial case:
-// take the current path's bounding box and hand it to
-// CGContextClipToRect(), which itself only actually supports "the whole
-// bitmap, no rotation" and errors out (rather than silently rendering
-// wrong) for anything else. So: if the path happens to be (or bound) the
-// full bitmap, this correctly does nothing; for a real non-rectangular or
-// partial clip shape, this will hit the same not-yet-implemented error
-// CGContextClipToRect already has, rather than pretending to succeed.
+// touchHLE has no real per-shape clip mask (see CGContextHostObject::
+// clip_rect); what's implemented here is an approximation: the current
+// path's bounding box is used as the clip rectangle instead of its exact
+// shape. For a path that's already an axis-aligned rectangle (a very
+// common case: CGContextAddRect() then CGContextClip()) this is exact; for
+// anything else (rounded rects, arbitrary shapes) it clips to the
+// rectangular bounds rather than the precise outline, which under-clips
+// (shows some pixels that should have been clipped away) rather than
+// crashing or drawing nothing.
 fn CGContextClip(env: &mut Environment, context: CGContextRef) {
     let subpaths = env.objc.borrow::<CGContextHostObject>(context).path.clone();
 
