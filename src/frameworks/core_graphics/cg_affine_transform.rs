@@ -123,22 +123,41 @@ impl CGAffineTransform {
         self == CGAffineTransformIdentity
     }
     pub fn make_rotation(angle: CGFloat) -> Self {
+        // A real device's Core Graphics tolerates degenerate (NaN/Infinity)
+        // inputs, e.g. arising from the app doing a division by zero
+        // somewhere upstream, silently producing garbage output rather than
+        // crashing. touchHLE previously crashed the whole emulator via
+        // unwrap() here; substitute the identity transform instead so guest
+        // code that (perhaps accidentally) constructs a degenerate transform
+        // doesn't take down the whole app.
         Matrix::<3>::from(&Matrix::<2>::z_rotation(angle))
             .try_into()
-            .unwrap()
+            .unwrap_or_else(|()| {
+                log!("Warning: CGAffineTransformMakeRotation({}) produced a degenerate transform, substituting identity", angle);
+                CGAffineTransformIdentity
+            })
     }
     pub fn make_scale(x: CGFloat, y: CGFloat) -> Self {
         Matrix::<3>::from(&Matrix::<2>::scale_2d(x, y))
             .try_into()
-            .unwrap()
+            .unwrap_or_else(|()| {
+                log!("Warning: CGAffineTransformMakeScale({}, {}) produced a degenerate transform, substituting identity", x, y);
+                CGAffineTransformIdentity
+            })
     }
     pub fn make_translation(x: CGFloat, y: CGFloat) -> Self {
-        Matrix::<3>::translate_2d(x, y).try_into().unwrap()
+        Matrix::<3>::translate_2d(x, y).try_into().unwrap_or_else(|()| {
+            log!("Warning: CGAffineTransformMakeTranslation({}, {}) produced a degenerate transform, substituting identity", x, y);
+            CGAffineTransformIdentity
+        })
     }
     pub fn concat(self, other: Self) -> Self {
         Matrix::<3>::multiply(&self.into(), &other.into())
             .try_into()
-            .unwrap()
+            .unwrap_or_else(|()| {
+                log!("Warning: CGAffineTransformConcat({:?}, {:?}) produced a degenerate transform, substituting identity", self, other);
+                CGAffineTransformIdentity
+            })
     }
     pub fn rotate(self, angle: CGFloat) -> Self {
         Self::make_rotation(angle).concat(self)
