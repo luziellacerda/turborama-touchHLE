@@ -8,7 +8,7 @@ use crate::abi::DotDotDot;
 use crate::dyld::FunctionExports;
 use crate::environment::Environment;
 use crate::export_c_func;
-use crate::libc::errno::{set_errno, EINVAL, ENOTSUP};
+use crate::libc::errno::{set_errno, EINVAL, ENOMEM, ENOTSUP};
 use crate::libc::posix_io;
 use crate::libc::posix_io::{off_t, FileDescriptor, SEEK_SET};
 use crate::mem::VMAllocError;
@@ -19,6 +19,9 @@ use std::collections::HashMap;
 const MAP_FILE: i32 = 0x0000;
 const MAP_FIXED: i32 = 0x0010;
 const MAP_ANON: i32 = 0x1000;
+
+// MAP_FAILED is defined as -1 while having a type of void *
+const MAP_FAILED: MutVoidPtr = MutVoidPtr::from_bits(u32::MAX);
 
 #[derive(Default)]
 pub struct State {
@@ -52,15 +55,39 @@ fn mmap(
 
     assert_eq!(offset, 0);
     let ptr = if addr.is_null() {
-        env.mem.vm_alloc(None, len).unwrap()
+        match env.mem.vm_alloc(None, len) {
+            Ok(ptr) => ptr,
+            Err(_) => {
+                // Real mmap() returns MAP_FAILED and sets errno rather
+                // than crashing when it can't satisfy the request. Mono's
+                // GC (used by e.g. Unity/MonoTouch games) is known to
+                // probe for large anonymous mappings up front and is
+                // expected to cope with this failing.
+                set_errno(env, ENOMEM);
+                return MAP_FAILED;
+            }
+        }
     } else {
         match env.mem.vm_alloc(Some(addr.to_bits()), len) {
+            Ok(ptr) => ptr,
             Err(VMAllocError::AddressUnavailable) if flags & MAP_FIXED == 0 => {
-                let ptr = env.mem.vm_alloc(None, len).unwrap();
-                log!("Warning: mmap could not allocate at hint {addr:?}, allocated at {ptr:?}",);
-                ptr
+                match env.mem.vm_alloc(None, len) {
+                    Ok(ptr) => {
+                        log!(
+                            "Warning: mmap could not allocate at hint {addr:?}, allocated at {ptr:?}",
+                        );
+                        ptr
+                    }
+                    Err(_) => {
+                        set_errno(env, ENOMEM);
+                        return MAP_FAILED;
+                    }
+                }
             }
-            result => result.unwrap(),
+            Err(_) => {
+                set_errno(env, ENOMEM);
+                return MAP_FAILED;
+            }
         }
     };
 
