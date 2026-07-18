@@ -8,6 +8,8 @@
 use crate::abi::GuestFunction;
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::core_foundation::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
+use crate::frameworks::core_foundation::cf_run_loop::CFRunLoopRef;
+use crate::frameworks::core_foundation::cf_string::CFStringRef;
 use crate::frameworks::core_foundation::CFTypeRef;
 use crate::libc::sys::socket::sockaddr;
 use crate::mem::{ConstPtr, MutPtr, MutVoidPtr, Ptr};
@@ -165,9 +167,39 @@ fn SCNetworkReachabilitySetCallback(
     false
 }
 
+fn SCNetworkReachabilityScheduleWithRunLoop(
+    env: &mut Environment,
+    target: SCNetworkReachabilityRef,
+    run_loop: CFRunLoopRef,
+    run_loop_mode: CFStringRef,
+) -> bool {
+    let target_class: Class = msg![env; target class];
+    assert_eq!(
+        target_class,
+        env.objc
+            .get_known_class("_touchHLE_SCNetworkReachability", &mut env.mem)
+    );
+    // As with SCNetworkReachabilitySetCallback above, touchHLE doesn't
+    // actually deliver asynchronous reachability change notifications (no
+    // callback is ever invoked), so there's nothing to genuinely schedule on
+    // the run loop here. Real scheduling calls succeed even when the network
+    // subsystem later never has anything to report, so returning true (and
+    // simply not doing anything) is the closest match to how apps observe
+    // this API in practice, and avoids crashing on what is otherwise just
+    // routine setup code.
+    log!(
+        "TODO: SCNetworkReachabilityScheduleWithRunLoop({:?}, {:?}, {:?}) -> TRUE",
+        target,
+        run_loop,
+        run_loop_mode
+    );
+    true
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(SCNetworkReachabilityCreateWithName(_, _)),
     export_c_func!(SCNetworkReachabilityCreateWithAddress(_, _)),
     export_c_func!(SCNetworkReachabilityGetFlags(_, _)),
     export_c_func!(SCNetworkReachabilitySetCallback(_, _, _)),
+    export_c_func!(SCNetworkReachabilityScheduleWithRunLoop(_, _, _)),
 ];
