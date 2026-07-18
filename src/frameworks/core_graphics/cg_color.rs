@@ -124,12 +124,17 @@ fn CGColorEqualToColor(env: &mut Environment, a: CGColorRef, b: CGColorRef) -> b
     to_rgba(&env.objc, a) == to_rgba(&env.objc, b)
 }
 
+fn CGColorGetAlpha(env: &mut Environment, color: CGColorRef) -> CGFloat {
+    to_rgba(&env.objc, color).3
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGColorRetain(_)),
     export_c_func!(CGColorRelease(_)),
     export_c_func!(CGColorCreate(_, _)),
     export_c_func!(CGColorCreateGenericRGB(_, _, _, _)),
     export_c_func!(CGColorEqualToColor(_, _)),
+    export_c_func!(CGColorGetAlpha(_)),
 ];
 
 /// Shortcut for use by `UIColor`: directly construct a `CGColor` instance from
