@@ -143,6 +143,33 @@ fn CFStringCreateWithBytes(
     msg![env; ns_string initWithBytes:bytes length:length encoding:encoding]
 }
 
+fn CFStringCreateWithCharacters(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    chars: ConstPtr<unichar>,
+    num_chars: CFIndex,
+) -> CFStringRef {
+    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
+    let num_chars: NSUInteger = num_chars.try_into().unwrap();
+    let ns_string: id = msg_class![env; NSString alloc];
+    msg![env; ns_string initWithCharacters:chars length:num_chars]
+}
+
+fn CFStringCreateWithCharactersNoCopy(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    chars: ConstPtr<unichar>,
+    num_chars: CFIndex,
+    contents_deallocator: CFAllocatorRef,
+) -> CFStringRef {
+    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
+    // As with CFStringCreateWithCStringNoCopy, the docs say callers should
+    // never assume the returned string is actually using the provided
+    // buffer (it may be copied), so copying unconditionally is compliant.
+    let _ = contents_deallocator; // TODO: support a real no-copy path?
+    CFStringCreateWithCharacters(env, allocator, chars, num_chars)
+}
+
 fn CFStringCreateWithCString(
     env: &mut Environment,
     allocator: CFAllocatorRef,
@@ -454,6 +481,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringCreateMutable(_, _)),
     export_c_func!(CFStringCreateMutableCopy(_, _, _)),
     export_c_func!(CFStringCreateWithBytes(_, _, _, _, _)),
+    export_c_func!(CFStringCreateWithCharacters(_, _, _)),
+    export_c_func!(CFStringCreateWithCharactersNoCopy(_, _, _, _)),
     export_c_func!(CFStringCreateWithCString(_, _, _)),
     export_c_func!(CFStringCreateWithCStringNoCopy(_, _, _, _)),
     export_c_func!(CFStringCreateWithFormat(_, _, _, _)),
