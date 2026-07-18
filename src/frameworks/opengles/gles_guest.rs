@@ -263,6 +263,22 @@ fn glFinish(env: &mut Environment) {
 fn glFlush(env: &mut Environment) {
     with_ctx_and_mem(env, |gles, _mem| unsafe { gles.Flush() })
 }
+// GL_EXT_discard_framebuffer is advertised in the extensions string above,
+// but isn't implemented by any GLES backend (the generated GL bindings
+// don't even have a loadable function pointer for it). It's purely a
+// performance hint to the driver about which framebuffer contents don't
+// need to be preserved after this point; per the extension spec, a
+// conformant implementation is always free to ignore the hint entirely,
+// so a no-op here can never affect what actually gets rendered. This
+// avoids adding this rarely-used extension to the GL bindings generator
+// only to immediately no-op it in every backend anyway.
+fn glDiscardFramebufferEXT(
+    _env: &mut Environment,
+    _target: GLenum,
+    _num_attachments: GLsizei,
+    _attachments: ConstPtr<GLenum>,
+) {
+}
 fn glGetString(env: &mut Environment, name: GLenum) -> ConstPtr<GLubyte> {
     let res = if let Some(&str) = env.framework_state.opengles.strings_cache.get(&name) {
         str
@@ -1508,6 +1524,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(glHint(_, _)),
     export_c_func!(glFinish()),
     export_c_func!(glFlush()),
+    export_c_func!(glDiscardFramebufferEXT(_, _, _)),
     export_c_func!(glGetString(_)),
     // Other state manipulation
     export_c_func!(glAlphaFunc(_, _)),
