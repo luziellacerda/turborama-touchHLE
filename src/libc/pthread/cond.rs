@@ -96,7 +96,12 @@ pub fn pthread_cond_init(
     cond: MutPtr<pthread_cond_t>,
     attr: ConstPtr<pthread_condattr_t>,
 ) -> i32 {
-    assert!(attr.is_null());
+    // A non-null attr just needs to have been produced by
+    // pthread_condattr_init(); touchHLE doesn't have anything configurable
+    // to actually read out of it (see pthread_condattr_t's definition).
+    if !attr.is_null() {
+        check_magic!(env, attr, MAGIC_CONDATTR);
+    }
     let opaque = pthread_cond_t {
         magic: MAGIC_COND,
         _unused: [0; 6],
