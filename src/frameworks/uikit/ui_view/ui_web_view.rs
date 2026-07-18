@@ -116,6 +116,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (bool)canForward {
     false
 }
+// canForward above used the wrong selector name; canGoForward is the
+// real UIWebView method.
+- (bool)canGoForward {
+    false
+}
 - (())goBack {
     log!("TODO: [(UIWebView*) {:?} goBack] (ignored)", this);
 }
