@@ -160,14 +160,25 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)initWithLocaleIdentifier:(id)string { // NSString *
     let str = ns_string::to_rust_string(env, string);
     log_dbg!("[(NSLocale *){:?} initWithLocaleIdentifier:'{}']", this, str);
-    retain(env, string);
-    // Loosely assume 2-char lang code here
-    // TODO: locale identifier parsing
-    assert_eq!(2, str.len());
-    assert!(str.to_lowercase().eq(&str));
-    assert!(!str.contains('_') && !str.contains('-'));
+    // TODO: proper locale identifier parsing (script/variant subtags,
+    // e.g. "zh_Hans_CN", are not handled here)
+    let (language, country) = match str.split_once(['_', '-']) {
+        Some((lang, country)) => (lang.to_string(), Some(country.to_string())),
+        None => (str.to_string(), None),
+    };
+    assert_eq!(2, language.len());
+    assert!(language.to_lowercase().eq(&language));
+    if let Some(ref country) = country {
+        assert!(!country.contains('_') && !country.contains('-')); // TODO
+    }
     assert!(env.objc.borrow::<NSLocaleHostObject>(this).language_code == nil);
-    env.objc.borrow_mut::<NSLocaleHostObject>(this).language_code = string;
+    assert!(env.objc.borrow::<NSLocaleHostObject>(this).country_code == nil);
+    let language_ns_string = ns_string::from_rust_string(env, language);
+    env.objc.borrow_mut::<NSLocaleHostObject>(this).language_code = language_ns_string;
+    if let Some(country) = country {
+        let country_ns_string = ns_string::from_rust_string(env, country);
+        env.objc.borrow_mut::<NSLocaleHostObject>(this).country_code = country_ns_string;
+    }
     this
 }
 
