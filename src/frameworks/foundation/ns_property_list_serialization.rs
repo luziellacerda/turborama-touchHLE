@@ -41,8 +41,6 @@ pub const CLASSES: ClassExports = objc_classes! {
 + (id)dataFromPropertyList:(id)plist
                     format:(NSPropertyListFormat)format
                 errorDescription:(MutPtr<id>)error_string { // NSString **
-    assert!(error_string.is_null()); // TODO
-
     let value = serialize_plist(env, plist);
     log_dbg!("dataFromPropertyList value {:?}", value);
     let mut buf = Vec::new();
@@ -50,6 +48,14 @@ pub const CLASSES: ClassExports = objc_classes! {
         NSPropertyListBinaryFormat_v1_0 => value.to_writer_binary(&mut buf).unwrap(),
         NSPropertyListXMLFormat_v1_0 => value.to_writer_xml(&mut buf).unwrap(),
         _ => panic!("Unsupported NSPropertyListFormat: {}", format),
+    }
+    // Serialization above always succeeds or panics (TODO: handle failures
+    // gracefully and report them via this out-parameter instead). On the
+    // success path taken here, the real API contract is to leave the
+    // caller's error-description pointer holding nil, which callers rely on
+    // to detect that nothing went wrong.
+    if !error_string.is_null() {
+        env.mem.write(error_string, nil);
     }
     let len: u32 = buf.len().try_into().unwrap();
     log_dbg!("dataFromPropertyList buf len {}", len);
