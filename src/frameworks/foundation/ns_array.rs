@@ -11,7 +11,7 @@ use super::ns_property_list_serialization::{
 };
 use super::{
     _nib_archive_decoder, ns_keyed_unarchiver, ns_string, ns_url, NSComparisonResult, NSNotFound,
-    NSRange, NSUInteger,
+    NSOrderedSame, NSRange, NSUInteger,
 };
 use crate::abi::{CallFromHost, GuestFunction};
 use crate::frameworks::foundation::ns_keyed_archiver::{
@@ -478,6 +478,12 @@ pub const CLASSES: ClassExports = objc_classes! {
     autorelease(env, new)
 }
 
+- (id)sortedArrayUsingDescriptors:(id)descriptors { // NSArray of NSSortDescriptor*
+    let new = msg![env; this mutableCopy];
+    () = msg![env; new sortUsingDescriptors:descriptors];
+    autorelease(env, new)
+}
+
 @end
 
 // Special variant for use by CFArray with NULL callbacks: objects aren't
@@ -620,6 +626,44 @@ pub const CLASSES: ClassExports = objc_classes! {
             let (l, r): (usize, usize) = (l.try_into().unwrap(), r.try_into().unwrap());
             let res: NSComparisonResult = msg_send(env, (array[l], comparator, array[r]));
             res
+        },
+        &mut |(_, array), l, r| {
+            let (l, r): (usize, usize) = (l.try_into().unwrap(), r.try_into().unwrap());
+            array.swap(l, r);
+        },
+    );
+
+    let (env, _) = user_data;
+    env.objc.borrow_mut::<ArrayHostObject>(this).array = array;
+}
+
+- (())sortUsingDescriptors:(id)descriptors { // NSArray of NSSortDescriptor*
+    let count: NSUInteger = msg![env; descriptors count];
+    let mut descriptors_vec = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        descriptors_vec.push(msg![env; descriptors objectAtIndex:i]);
+    }
+
+    let host_object: &mut ArrayHostObject = env.objc.borrow_mut(this);
+    let mut array = std::mem::take(&mut host_object.array);
+    let len = array.len().try_into().unwrap();
+    let mut user_data = (env, &mut array);
+    qsort_generic(
+        &mut user_data,
+        len,
+        &mut |(env, array), l, r| {
+            let (l, r): (usize, usize) = (l.try_into().unwrap(), r.try_into().unwrap());
+            let mut result: NSComparisonResult = NSOrderedSame;
+            let (obj_l, obj_r) = (array[l], array[r]);
+            for &descriptor in &descriptors_vec {
+                let res: NSComparisonResult =
+                    msg![env; descriptor compareObject:obj_l toObject:obj_r];
+                if res != NSOrderedSame {
+                    result = res;
+                    break;
+                }
+            }
+            result
         },
         &mut |(_, array), l, r| {
             let (l, r): (usize, usize) = (l.try_into().unwrap(), r.try_into().unwrap());
