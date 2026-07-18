@@ -212,11 +212,32 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (id)absoluteURL {
-    // FIXME: don't assume URL is already absolute
-    let &NSURLHostObject::OtherURL { .. } = env.objc.borrow(this) else {
-        unimplemented!(); // TODO
+    let (ns_string, working_directory) = match env.objc.borrow(this) {
+        NSURLHostObject::FileURL {
+            ns_string,
+            working_directory,
+        } => (*ns_string, Some(working_directory.as_str().to_string())),
+        NSURLHostObject::OtherURL { ns_string } => (*ns_string, None),
     };
-    this
+    let Some(working_directory) = working_directory else {
+        // FIXME: don't assume a non-file URL is already absolute
+        return this;
+    };
+    let path = to_rust_string(env, ns_string).to_string();
+    if path.starts_with('/') {
+        // Already absolute.
+        return this;
+    }
+    // Resolve the relative path against the working directory saved at
+    // creation time.
+    let absolute = format!(
+        "{}/{}",
+        working_directory.trim_end_matches('/'),
+        path.trim_start_matches("./")
+    );
+    let absolute = from_rust_string(env, absolute);
+    let absolute = autorelease(env, absolute);
+    msg_class![env; NSURL fileURLWithPath:absolute]
 }
 
 - (bool)getFileSystemRepresentation:(MutPtr<u8>)buffer
