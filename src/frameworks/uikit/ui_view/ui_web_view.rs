@@ -5,16 +5,59 @@
  */
 //! `UIWebView`.
 
-use crate::frameworks::foundation::ns_string::to_rust_string;
+use crate::frameworks::foundation::ns_string::{get_static_str, to_rust_string};
 use crate::msg;
-use crate::objc::{id, nil, objc_classes, ClassExports};
+use crate::objc::{
+    id, impl_HostObject_with_superclass, nil, objc_classes, ClassExports, NSZonePtr,
+};
+use crate::Environment;
 use std::borrow::Cow;
+
+pub struct UIWebViewHostObject {
+    superclass: super::UIViewHostObject,
+    /// Not retained, matching UIKit's assign semantics for this delegate.
+    delegate: id,
+}
+impl_HostObject_with_superclass!(UIWebViewHostObject);
+impl Default for UIWebViewHostObject {
+    fn default() -> Self {
+        UIWebViewHostObject {
+            superclass: Default::default(),
+            delegate: nil,
+        }
+    }
+}
+
+/// The load methods below don't actually load anything, so no
+/// `webViewDidFinishLoad:` callback would ever arrive on its own, and apps
+/// that wait for one (ad frameworks in particular) would wait forever.
+/// Pretend the load succeeded instead: if the delegate implements
+/// `webViewDidFinishLoad:`, schedule it for the next run loop iteration,
+/// which matches the asynchronous behaviour of the real UIKit.
+fn schedule_did_finish_load(env: &mut Environment, this: id) {
+    let delegate = env.objc.borrow::<UIWebViewHostObject>(this).delegate;
+    if delegate == nil {
+        return;
+    }
+    let sel = env
+        .objc
+        .register_host_selector("webViewDidFinishLoad:".to_string(), &mut env.mem);
+    if !env.objc.object_has_method(&env.mem, delegate, sel) {
+        return;
+    }
+    () = msg![env; delegate performSelector:sel withObject:this afterDelay:0.0];
+}
 
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
 
 @implementation UIWebView: UIView
+
++ (id)allocWithZone:(NSZonePtr)_zone {
+    let host_object = Box::<UIWebViewHostObject>::default();
+    env.objc.alloc_object(this, host_object, &mut env.mem)
+}
 
 // NSCoding implementation
 - (id)initWithCoder:(id)_coder {
@@ -24,19 +67,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())setScalesPageToFit:(bool)_scales {
     // TODO
 }
-- (())setDelegate:(id)_delegate {
-    // TODO
+- (())setDelegate:(id)delegate {
+    env.objc.borrow_mut::<UIWebViewHostObject>(this).delegate = delegate;
 }
 - (())setDetectsPhoneNumbers:(bool)_detects {
     // TODO
 }
-// setDelegate: above doesn't store the delegate, so there is nothing to
-// return here. Returning nil is safe: messages to nil are no-ops, and
-// since loadRequest: below never actually loads anything, the delegate
-// would never be called back anyway.
 - (id)delegate {
-    log!("TODO: [(UIWebView*) {:?} delegate] (returning nil)", this);
-    nil
+    env.objc.borrow::<UIWebViewHostObject>(this).delegate
 }
 - (())loadRequest:(id)request { // NSURLRequest*
     let url_string = if request != nil {
@@ -47,6 +85,27 @@ pub const CLASSES: ClassExports = objc_classes! {
         Cow::default()
     };
     log!("TODO: [(UIWebView*) {:?} loadRequest:{:?} ({})]", this, request, url_string);
+    schedule_did_finish_load(env, this);
+}
+- (())loadHTMLString:(id)string // NSString*
+             baseURL:(id)base_url { // NSURL*
+    log!(
+        "TODO: [(UIWebView*) {:?} loadHTMLString:{:?} baseURL:{:?}]",
+        this, string, base_url
+    );
+    schedule_did_finish_load(env, this);
+}
+- (id)stringByEvaluatingJavaScriptFromString:(id)script { // NSString*
+    let script_string = if script != nil {
+        to_rust_string(env, script)
+    } else {
+        Cow::default()
+    };
+    log!(
+        "TODO: [(UIWebView*) {:?} stringByEvaluatingJavaScriptFromString:{:?}] (returning empty string)",
+        this, script_string
+    );
+    get_static_str(env, "")
 }
 
 @end
