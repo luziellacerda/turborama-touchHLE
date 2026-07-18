@@ -278,6 +278,30 @@ fn getenv(env: &mut Environment, name: ConstPtr<u8>) -> MutPtr<u8> {
     // Caller should not modify the result
     value
 }
+fn putenv(env: &mut Environment, string: MutPtr<u8>) -> i32 {
+    // TODO: handle errno properly
+    set_errno(env, 0);
+
+    let full_cstr = env.mem.cstr_at(string.cast_const());
+    let Some(eq_pos) = full_cstr.iter().position(|&b| b == b'=') else {
+        // No '=' in the string is invalid input, same as real putenv().
+        set_errno(env, EINVAL);
+        return -1;
+    };
+    let name = full_cstr[..eq_pos].to_vec();
+    // Unlike setenv(), real putenv() takes ownership of `string` directly
+    // rather than copying it. touchHLE's env_vars storage always owns its
+    // values though (see setenv()/getenv()), so a copy of just the value
+    // portion is made here to fit that model; the original `string` is left
+    // alone; freeing it later is left to the guest, as usual for putenv().
+    let value_ptr: ConstPtr<u8> = (string + (eq_pos as u32) + 1).cast_const();
+    if let Some(&existing) = env.env_vars.get(&name) {
+        env.mem.free(existing.cast());
+    }
+    let value = super::string::strdup(env, value_ptr);
+    env.env_vars.insert(name, value);
+    0 // success
+}
 fn setenv(env: &mut Environment, name: ConstPtr<u8>, value: ConstPtr<u8>, overwrite: i32) -> i32 {
     // TODO: handle errno properly
     set_errno(env, 0);
@@ -599,6 +623,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(arc4random()),
     export_c_func!(div(_, _)),
     export_c_func!(getenv(_)),
+    export_c_func!(putenv(_)),
     export_c_func!(setenv(_, _, _)),
     export_c_func!(unsetenv(_)),
     export_c_func!(exit(_)),
