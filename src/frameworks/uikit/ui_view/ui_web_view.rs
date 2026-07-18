@@ -30,6 +30,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())setDetectsPhoneNumbers:(bool)_detects {
     // TODO
 }
+// setDelegate: above doesn't store the delegate, so there is nothing to
+// return here. Returning nil is safe: messages to nil are no-ops, and
+// since loadRequest: below never actually loads anything, the delegate
+// would never be called back anyway.
+- (id)delegate {
+    log!("TODO: [(UIWebView*) {:?} delegate] (returning nil)", this);
+    nil
+}
 - (())loadRequest:(id)request { // NSURLRequest*
     let url_string = if request != nil {
         let url = msg![env; request URL];
