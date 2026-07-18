@@ -5,11 +5,21 @@
  */
 //! `NSURLConnection`.
 
+use super::ns_run_loop::add_perform_request;
 use super::{ns_string, NSInteger};
 use crate::environment::Environment;
 use crate::mem::MutPtr;
-use crate::objc::{autorelease, id, msg, msg_class, nil, objc_classes, release, ClassExports};
+use crate::objc::{
+    autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
+    NSZonePtr,
+};
 use std::borrow::Cow;
+
+struct NSURLConnectionHostObject {
+    delegate: id,
+    error: id,
+}
+impl HostObject for NSURLConnectionHostObject {}
 
 const NSURLErrorDomain: &str = "NSURLErrorDomain";
 
@@ -22,6 +32,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 (env, this, _cmd);
 
 @implementation NSURLConnection: NSObject
+
++ (id)allocWithZone:(NSZonePtr)_zone {
+    let host_object = Box::new(NSURLConnectionHostObject {
+        delegate: nil,
+        error: nil,
+    });
+    env.objc.alloc_object(this, host_object, &mut env.mem)
+}
 
 + (id)sendSynchronousRequest:(id)request // NSURLRequest *
            returningResponse:(MutPtr<id>)response // NSURLResponse **
@@ -63,15 +81,75 @@ pub const CLASSES: ClassExports = objc_classes! {
              delegate:(id)delegate
      startImmediately:(bool)start_immediately {
     log!(
-        "TODO: [(NSURLConnection *){:?} initWithRequest:{:?} ('{}') delegate:{:?} startImmediately:{}] -> nil",
+        "[(NSURLConnection *){:?} initWithRequest:{:?} ('{}') delegate:{:?} startImmediately:{}]: no network access, connection will fail with an error",
         this,
         request,
         url_string_from_request(env, request),
         delegate,
         start_immediately,
     );
-    release(env, this);
-    nil
+
+    // touchHLE does not have network access (unless explicitly allowed, which
+    // is not implemented for NSURLConnection yet). Behave like a device
+    // without an Internet connection: asynchronously deliver
+    // connection:didFailWithError: to the delegate. Many apps only proceed
+    // (e.g. past a loading screen) once the connection reports either success
+    // or failure, so never delivering anything makes them hang forever.
+    let domain = ns_string::get_static_str(env, NSURLErrorDomain);
+    let error: id = msg_class![env; NSError alloc];
+    // TODO: fill userInfo
+    let error: id =
+        msg![env; error initWithDomain:domain code:NSURLErrorNotConnectedToInternet userInfo:nil];
+
+    retain(env, delegate);
+    let host_object = env
+        .objc
+        .borrow_mut::<NSURLConnectionHostObject>(this);
+    host_object.delegate = delegate;
+    host_object.error = error;
+
+    // Deliver on a later run loop iteration, not synchronously: the app has
+    // usually not finished setting up its state when this returns.
+    let selector = env
+        .objc
+        .lookup_selector("_touchHLE_deliverConnectionFailure")
+        .unwrap();
+    let run_loop: id = msg_class![env; NSRunLoop mainRunLoop];
+    add_perform_request(env, run_loop, this, selector, nil, Some(0.0), false);
+
+    this
+}
+
+// Private helper: delivers the failure scheduled by
+// initWithRequest:delegate:startImmediately: (see above). Needed because the
+// run loop's perform-request machinery only supports single-argument
+// selectors.
+- (())_touchHLE_deliverConnectionFailure {
+    let &NSURLConnectionHostObject { delegate, error } = env.objc.borrow(this);
+    let responds: bool = match env.objc.lookup_selector("connection:didFailWithError:") {
+        Some(sel) => msg![env; delegate respondsToSelector:sel],
+        None => false,
+    };
+    if responds {
+        let _: () = msg![env; delegate connection:this didFailWithError:error];
+    } else {
+        log!(
+            "Warning: NSURLConnection delegate {:?} does not respond to connection:didFailWithError:, dropping error",
+            delegate
+        );
+    }
+    let host_object = env
+        .objc
+        .borrow_mut::<NSURLConnectionHostObject>(this);
+    host_object.delegate = nil;
+    host_object.error = nil;
+    release(env, error);
+    release(env, delegate);
+}
+
+- (())cancel {
+    // We never deliver anything after the failure, so there is nothing to do.
+    log_dbg!("[(NSURLConnection *){:?} cancel]", this);
 }
 
 @end
