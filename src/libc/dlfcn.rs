@@ -29,6 +29,20 @@ fn dlopen(env: &mut Environment, path: ConstPtr<u8>, _mode: i32) -> MutVoidPtr {
     path.cast_mut().cast()
 }
 
+/// Symbols that are known to be legitimately optional: some runtimes (Mono
+/// among them) use `dlsym()` specifically to *probe* whether a private or
+/// version-conditional API exists, and are written to tolerate getting NULL
+/// back, exactly like a real device would return for a symbol that isn't
+/// present. These are exempted from the "panic to flag a likely-missing
+/// host function" behaviour below, since a panic here would be flagging a
+/// false positive, not an actual gap.
+const KNOWN_OPTIONAL_SYMBOLS: &[&str] = &[
+    // Used by Mono/MonoTouch-based apps (e.g. Unity, MonoGame) to
+    // conditionally call the (fairly obscure, version-gated) app icon
+    // badge-number API.
+    "__setBadgeNumber",
+];
+
 fn dlsym(env: &mut Environment, handle: MutVoidPtr, symbol: ConstPtr<u8>) -> MutVoidPtr {
     assert!(
         handle == RTLD_DEFAULT || is_known_library(env.mem.cstr_at_utf8(handle.cast()).unwrap())
@@ -42,9 +56,12 @@ fn dlsym(env: &mut Environment, handle: MutVoidPtr, symbol: ConstPtr<u8>) -> Mut
     // where appropriate!
     let addr = env
         .dyld
-        .create_proc_address(&mut env.mem, &mut env.cpu, &symbol)
-        .unwrap_or_else(|_| panic!("dlsym() for unimplemented function {symbol}"));
-    Ptr::from_bits(addr.addr_with_thumb_bit())
+        .create_proc_address(&mut env.mem, &mut env.cpu, &symbol);
+    match addr {
+        Ok(addr) => Ptr::from_bits(addr.addr_with_thumb_bit()),
+        Err(_) if KNOWN_OPTIONAL_SYMBOLS.contains(&symbol.as_str()) => Ptr::null(),
+        Err(_) => panic!("dlsym() for unimplemented function {symbol}"),
+    }
 }
 
 fn dlclose(env: &mut Environment, handle: MutVoidPtr) -> i32 {
