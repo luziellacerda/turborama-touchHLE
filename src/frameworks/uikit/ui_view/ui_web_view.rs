@@ -107,6 +107,30 @@ pub const CLASSES: ClassExports = objc_classes! {
     );
     get_static_str(env, "")
 }
+// touchHLE doesn't implement real page navigation (loadRequest:/
+// loadHTMLString:baseURL: are no-ops), so there is never any history to
+// go back or forward through.
+- (bool)canGoBack {
+    false
+}
+- (bool)canForward {
+    false
+}
+- (())goBack {
+    log!("TODO: [(UIWebView*) {:?} goBack] (ignored)", this);
+}
+- (())goForward {
+    log!("TODO: [(UIWebView*) {:?} goForward] (ignored)", this);
+}
+- (())reload {
+    log!("TODO: [(UIWebView*) {:?} reload] (ignored)", this);
+}
+- (())stopLoading {
+    log!("TODO: [(UIWebView*) {:?} stopLoading] (ignored)", this);
+}
+- (bool)isLoading {
+    false
+}
 
 @end
 
