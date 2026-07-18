@@ -188,6 +188,10 @@ pub const CLASSES: ClassExports = objc_classes! {
     // No need to retain url_copy as we made a copy
 }
 
+- (())setTimeoutInterval:(NSTimeInterval)timeout_interval {
+    env.objc.borrow_mut::<NSURLRequestHostObject>(this).timeout_interval = timeout_interval;
+}
+
 - (())setValue:(id)value // NSString *
     forHTTPHeaderField:(id)field { // NSString *
     log_dbg!("[(NSURLRequest*){:?} setValue:'{}' forHTTPHeaderField:'{}']", this, to_rust_string(env, value), to_rust_string(env, field));
