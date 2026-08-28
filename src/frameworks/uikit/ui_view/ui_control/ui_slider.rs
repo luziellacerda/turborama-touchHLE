@@ -17,6 +17,7 @@ pub struct UISliderHostObject {
     value: f32,
     minimum_value: f32,
     maximum_value: f32,
+    continuous: bool,
 }
 impl_HostObject_with_superclass!(UISliderHostObject);
 impl Default for UISliderHostObject {
@@ -26,6 +27,8 @@ impl Default for UISliderHostObject {
             value: 0.0,
             minimum_value: 0.0,
             maximum_value: 1.0,
+            // UIKit's default is YES.
+            continuous: true,
         }
     }
 }
@@ -103,6 +106,17 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (())setMaximumValue:(f32)value {
     env.objc.borrow_mut::<UISliderHostObject>(this).maximum_value = value;
+}
+
+// Whether value-changed events are sent continuously while dragging, or only
+// once the drag ends. The slider isn't rendered and so never generates drag
+// events itself, but apps configure this while setting up the control and
+// read it back, so the value has to round-trip.
+- (bool)isContinuous {
+    env.objc.borrow::<UISliderHostObject>(this).continuous
+}
+- (())setContinuous:(bool)continuous {
+    env.objc.borrow_mut::<UISliderHostObject>(this).continuous = continuous;
 }
 
 // TODO: all of it
