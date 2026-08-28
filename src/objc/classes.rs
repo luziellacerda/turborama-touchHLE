@@ -1147,5 +1147,16 @@ pub(super) fn class_getProperty(
         log!("TODO: class_getProperty(UIScreen, scale) -> NULL");
         return Ptr::null();
     }
-    todo!()
+    // touchHLE doesn't support `objc_property_t` yet, so we can't return real
+    // property metadata for anything. Returning NULL means "no such declared
+    // property", which is a safe answer: apps typically call this for feature
+    // or OS-version detection (as the UIScreen/scale case above shows) and
+    // handle a NULL result gracefully. This is preferable to panicking.
+    // TODO: support `objc_property_t` properly and return real metadata.
+    log!(
+        "TODO: class_getProperty({}, {}) -> NULL (objc_property_t unsupported)",
+        class_name_string,
+        c_name
+    );
+    Ptr::null()
 }
