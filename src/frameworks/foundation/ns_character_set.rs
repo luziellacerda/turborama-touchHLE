@@ -121,6 +121,79 @@ pub const CLASSES: ClassExports = objc_classes! {
     autorelease(env, new)
 }
 
++ (id)punctuationCharacterSet {
+    // Approximation using ASCII punctuation. Note this is slightly wider than
+    // Unicode's Punctuation (P*) category, which classifies some of these (e.g.
+    // $ + < = > ^ ` | ~) as symbols instead; that distinction rarely matters
+    // for the text parsing these apps do.
+    // TODO: support the full Unicode punctuation category.
+    let set: HashSet<unichar> = (0u8..=0x7F)
+        .filter(|c| c.is_ascii_punctuation())
+        .map(|c| c as unichar)
+        .collect();
+
+    let new: id = msg![env; this alloc];
+    env.objc.borrow_mut::<CharacterSetHostObject>(new).set = set;
+
+    autorelease(env, new)
+}
+
++ (id)decimalDigitCharacterSet {
+    // ASCII decimal digits 0-9. (Unicode's decimalDigit category also includes
+    // digits from other scripts; these apps only need ASCII.)
+    // TODO: support the full Unicode decimal-digit category.
+    let set: HashSet<unichar> = (b'0'..=b'9').map(|c| c as unichar).collect();
+
+    let new: id = msg![env; this alloc];
+    env.objc.borrow_mut::<CharacterSetHostObject>(new).set = set;
+
+    autorelease(env, new)
+}
+
++ (id)letterCharacterSet {
+    // The full Unicode letter set is enormous and the host object stores an
+    // explicit set, so we populate the Basic Latin + Latin-1 range, which
+    // covers the ASCII/Western text these apps actually parse.
+    // TODO: support the full Unicode letter category.
+    let set: HashSet<unichar> = (0u32..=0xFF)
+        .filter(|&c| char::from_u32(c).map(|c| c.is_alphabetic()).unwrap_or(false))
+        .map(|c| unichar::try_from(c).unwrap())
+        .collect();
+
+    let new: id = msg![env; this alloc];
+    env.objc.borrow_mut::<CharacterSetHostObject>(new).set = set;
+
+    autorelease(env, new)
+}
+
++ (id)lowercaseLetterCharacterSet {
+    // Basic Latin + Latin-1 lowercase letters. See letterCharacterSet re: the
+    // approximation. TODO: support the full Unicode lowercase-letter category.
+    let set: HashSet<unichar> = (0u32..=0xFF)
+        .filter(|&c| char::from_u32(c).map(|c| c.is_lowercase()).unwrap_or(false))
+        .map(|c| unichar::try_from(c).unwrap())
+        .collect();
+
+    let new: id = msg![env; this alloc];
+    env.objc.borrow_mut::<CharacterSetHostObject>(new).set = set;
+
+    autorelease(env, new)
+}
+
++ (id)uppercaseLetterCharacterSet {
+    // Basic Latin + Latin-1 uppercase letters.
+    // TODO: support the full Unicode uppercase-letter category.
+    let set: HashSet<unichar> = (0u32..=0xFF)
+        .filter(|&c| char::from_u32(c).map(|c| c.is_uppercase()).unwrap_or(false))
+        .map(|c| unichar::try_from(c).unwrap())
+        .collect();
+
+    let new: id = msg![env; this alloc];
+    env.objc.borrow_mut::<CharacterSetHostObject>(new).set = set;
+
+    autorelease(env, new)
+}
+
 + (id)controlCharacterSet {
     let set = HashSet::from(CONTROL_CHARACTERS.map(|c| unichar::try_from(c).unwrap()));
 
