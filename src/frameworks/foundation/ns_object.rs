@@ -145,6 +145,18 @@ pub const CLASSES: ClassExports = objc_classes! {
     method_imp_as_function_pointer(env, class, selector)
 }
 
+- (id)methodSignatureForSelector:(SEL)sel {
+    // Used by the message-forwarding machinery. Return a signature if the
+    // object responds to the selector, otherwise nil.
+    match env.objc.object_get_method_signature(&env.mem, this, sel) {
+        Some(&sig) => {
+            log_dbg!("methodSignatureForSelector: '{}' -> {:?}", sel.as_str(&env.mem), env.mem.cstr_at_utf8(sig));
+            msg_class![env; NSMethodSignature signatureWithObjCTypes:sig]
+        }
+        None => nil,
+    }
+}
+
 - (id)init {
     this
 }
