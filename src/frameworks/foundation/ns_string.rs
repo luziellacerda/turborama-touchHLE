@@ -1848,6 +1848,13 @@ pub fn from_u16_vec(env: &mut Environment, from: Vec<u16>) -> id {
 ///
 /// TODO: Try to avoid converting from UTF-16 in more cases.
 pub fn to_rust_string(env: &mut Environment, string: id) -> Cow<'static, str> {
+    // A nil NSString behaves like an empty string here, rather than crashing in
+    // borrow_mut below. This matches the way a nil receiver produces empty/zero
+    // results on iOS, and lets host code that processes strings (comparison,
+    // sorting, concatenation, etc.) tolerate a nil element.
+    if string == nil {
+        return Cow::Borrowed("");
+    }
     // TODO: handle foreign subclasses of NSString
     env.objc
         .borrow_mut::<StringHostObject>(string)
