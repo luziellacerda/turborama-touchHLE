@@ -20,6 +20,10 @@ pub struct UITableViewCellHostObject {
     content_view: id,
     /// NSString*, the reuse identifier this cell was created with.
     reuse_identifier: id,
+    /// UIView*, the accessory view shown on the trailing edge, or nil.
+    accessory_view: id,
+    /// UITableViewCellAccessoryType (enum); 0 = none.
+    accessory_type: NSInteger,
 }
 impl_HostObject_with_superclass!(UITableViewCellHostObject);
 impl Default for UITableViewCellHostObject {
@@ -29,6 +33,8 @@ impl Default for UITableViewCellHostObject {
             text_label: nil,
             content_view: nil,
             reuse_identifier: nil,
+            accessory_view: nil,
+            accessory_type: 0,
         }
     }
 }
@@ -84,11 +90,13 @@ pub const CLASSES: ClassExports = objc_classes! {
         text_label,
         content_view,
         reuse_identifier,
+        accessory_view,
         ..
     } = env.objc.borrow::<UITableViewCellHostObject>(this);
     release(env, text_label);
     release(env, content_view);
     release(env, reuse_identifier);
+    release(env, accessory_view);
     msg_super![env; this dealloc]
 }
 
@@ -113,6 +121,34 @@ pub const CLASSES: ClassExports = objc_classes! {
     () = msg![env; content_view addSubview:label];
     env.objc.borrow_mut::<UITableViewCellHostObject>(this).text_label = label;
     label
+}
+
+- (())setAccessoryView:(id)accessory_view { // UIView*
+    let old = env.objc.borrow::<UITableViewCellHostObject>(this).accessory_view;
+    if old == accessory_view {
+        return;
+    }
+    retain(env, accessory_view);
+    if old != nil {
+        () = msg![env; old removeFromSuperview];
+        release(env, old);
+    }
+    env.objc.borrow_mut::<UITableViewCellHostObject>(this).accessory_view = accessory_view;
+    if accessory_view != nil {
+        // Add it as a subview so the existing UIView rendering shows it. Exact
+        // trailing-edge positioning isn't modelled.
+        () = msg![env; this addSubview:accessory_view];
+    }
+}
+- (id)accessoryView {
+    env.objc.borrow::<UITableViewCellHostObject>(this).accessory_view
+}
+
+- (())setAccessoryType:(NSInteger)accessory_type {
+    env.objc.borrow_mut::<UITableViewCellHostObject>(this).accessory_type = accessory_type;
+}
+- (NSInteger)accessoryType {
+    env.objc.borrow::<UITableViewCellHostObject>(this).accessory_type
 }
 
 // Selection is a no-op for now (nothing is visually rendered differently).
