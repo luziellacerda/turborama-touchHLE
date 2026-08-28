@@ -1308,6 +1308,36 @@ pub const CLASSES: ClassExports = objc_classes! {
     () = msg![env; this setString:new];
 }
 
+- (())insertString:(id)a_string // NSString*
+           atIndex:(NSUInteger)index {
+    assert_ne!(a_string, nil);
+    let len: NSUInteger = msg![env; this length];
+    assert!(index <= len);
+
+    let left: id = if index == 0 {
+        get_static_str(env, "")
+    } else {
+        let left_range = NSRange {
+            location: 0,
+            length: index,
+        };
+        msg![env; this substringWithRange:left_range]
+    };
+    let right: id = if index == len {
+        get_static_str(env, "")
+    } else {
+        let right_range = NSRange {
+            location: index,
+            length: len - index,
+        };
+        msg![env; this substringWithRange:right_range]
+    };
+
+    let res: id = msg![env; left stringByAppendingString:a_string];
+    let res: id = msg![env; res stringByAppendingString:right];
+    () = msg![env; this setString:res];
+}
+
 - (())deleteCharactersInRange:(NSRange)range {
     let location = range.location;
     let length = range.length;
