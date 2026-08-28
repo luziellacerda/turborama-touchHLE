@@ -121,6 +121,35 @@ impl ObjC {
 
 /// Undocumented function (see link above) apparently used by auto-generated
 /// methods for properties to get an ivar.
+/// `Ivar object_getInstanceVariable(id obj, const char *name, void **outValue)`
+///
+/// Reads an instance variable by name. touchHLE has no `Ivar` type, so NULL is
+/// returned as the handle (as is done for `objc_property_t`); the value is still
+/// written to `out_value`, which is what callers actually use.
+pub(super) fn object_getInstanceVariable(
+    env: &mut Environment,
+    obj: id,
+    name: ConstPtr<u8>,
+    out_value: MutPtr<MutVoidPtr>,
+) -> MutVoidPtr {
+    if obj == nil {
+        if !out_value.is_null() {
+            env.mem.write(out_value, Ptr::null());
+        }
+        return Ptr::null();
+    }
+    let name_string = env.mem.cstr_at_utf8(name).unwrap().to_owned();
+    let value: MutVoidPtr = match env.objc.object_lookup_ivar(&env.mem, obj, &name_string) {
+        Some(ivar_ptr) => env.mem.read(ivar_ptr.cast()),
+        None => Ptr::null(),
+    };
+    if !out_value.is_null() {
+        env.mem.write(out_value, value);
+    }
+    // TODO: support the `Ivar` type properly
+    Ptr::null()
+}
+
 pub(super) fn objc_getProperty(
     env: &mut Environment,
     this: id,

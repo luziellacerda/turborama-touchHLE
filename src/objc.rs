@@ -57,7 +57,9 @@ use messages::{
 };
 use methods::method_list_t;
 use objects::{objc_object, object_getClass, HostObjectEntry};
-use properties::{ivar_list_t, objc_copyStruct, objc_getProperty, objc_setProperty};
+use properties::{
+    ivar_list_t, objc_copyStruct, objc_getProperty, objc_setProperty, object_getInstanceVariable,
+};
 use selectors::sel_registerName;
 use synchronization::{objc_sync_enter, objc_sync_exit};
 
@@ -157,6 +159,7 @@ const FUNCTIONS: FunctionExports = &[
     export_c_func!(objc_msgSendSuper2_stret(_, _, _)),
     export_c_func!(objc_getClass(_)),
     export_c_func!(objc_getProperty(_, _, _, _)),
+    export_c_func!(object_getInstanceVariable(_, _, _)),
     export_c_func!(objc_setProperty(_, _, _, _, _, _)),
     export_c_func!(objc_copyStruct(_, _, _, _, _)),
     export_c_func!(objc_sync_enter(_)),
