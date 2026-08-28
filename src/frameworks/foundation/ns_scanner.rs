@@ -261,9 +261,90 @@ pub const CLASSES: ClassExports = objc_classes! {
     msg![env; this scanInt:(result.cast::<i32>())]
 }
 
+- (bool)scanFloat:(MutPtr<f32>)result {
+    let mut value: f64 = 0.0;
+    if !scan_floating_point(env, this, &mut value) {
+        return false;
+    }
+    if !result.is_null() {
+        env.mem.write(result, value as f32);
+    }
+    true
+}
+
+- (bool)scanDouble:(MutPtr<f64>)result {
+    let mut value: f64 = 0.0;
+    if !scan_floating_point(env, this, &mut value) {
+        return false;
+    }
+    if !result.is_null() {
+        env.mem.write(result, value);
+    }
+    true
+}
+
 @end
 
 };
+
+/// Shared implementation for `scanFloat:` and `scanDouble:`. Follows the same
+/// structure as `scanInt:`, but accepts a floating-point literal (optional sign,
+/// digits, decimal point, and exponent).
+fn scan_floating_point(env: &mut Environment, this: id, out: &mut f64) -> bool {
+    skip_characters(env, this);
+
+    let NSScannerHostObject { to_be_skipped, string, len, pos } = std::mem::take(env.objc.borrow_mut::<NSScannerHostObject>(this));
+    let restore = |env: &mut Environment| {
+        *env.objc.borrow_mut::<NSScannerHostObject>(this) = NSScannerHostObject { to_be_skipped, string, len, pos };
+    };
+    let left: id = msg![env; string substringFromIndex:pos];
+    if left == nil {
+        restore(env);
+        return false;
+    }
+
+    let st = to_rust_string(env, left);
+    // Take the run of characters that can appear in a number, then find the
+    // longest prefix of it that actually parses. Restricting the candidate
+    // range first avoids accepting trailing whitespace, which `f64::from_str`
+    // would otherwise allow.
+    let candidate_len = {
+        let mut n = 0;
+        for (i, c) in st.char_indices() {
+            let prev = st[..i].chars().last();
+            let is_exponent_sign =
+                (c == '+' || c == '-') && matches!(prev, Some('e') | Some('E'));
+            let is_leading_sign = (c == '+' || c == '-') && i == 0;
+            if c.is_ascii_digit() || c == '.' || c == 'e' || c == 'E' || is_exponent_sign || is_leading_sign {
+                n = i + c.len_utf8();
+            } else {
+                break;
+            }
+        }
+        n
+    };
+    let mut cutoff = 0;
+    let mut value = 0.0f64;
+    for i in 1..=candidate_len {
+        if !st.is_char_boundary(i) {
+            continue;
+        }
+        if let Ok(v) = st[..i].parse::<f64>() {
+            value = v;
+            cutoff = i;
+        }
+    }
+    if cutoff == 0 {
+        log_dbg!("scanFloat/scanDouble: no valid number found for '{}'", st);
+        restore(env);
+        return false;
+    }
+
+    *out = value;
+    log_dbg!("scanFloat/scanDouble: from '{}' -> {}", st, value);
+    *env.objc.borrow_mut::<NSScannerHostObject>(this) = NSScannerHostObject { to_be_skipped, string, len, pos: pos + cutoff as NSUInteger };
+    true
+}
 
 // Helper functions, skips characters from `charactersToBeSkipped` set
 fn skip_characters(env: &mut Environment, scanner: id) {
