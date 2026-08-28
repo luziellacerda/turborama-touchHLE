@@ -134,6 +134,39 @@ pub const CLASSES: ClassExports = objc_classes! {
     run_run_loop(env, this, /* single_iteration: */ false, Some(time_limit));
 }
 
+- (bool)runMode:(NSRunLoopMode)mode
+     beforeDate:(id)date {
+    // Apple returns as soon as the first input source has been handled, or
+    // when `date` is reached, whichever comes first. Apps rely on the former:
+    // they park a thread here with a distant date and expect to be given
+    // control back once their callback has run, typically looping until some
+    // flag is set. Running to the time limit instead would never return.
+    //
+    // A single iteration is the closest match: it processes whatever is ready
+    // and returns. Note this only works because a connection's callback is
+    // scheduled on the run loop of the thread that started it, so the
+    // iteration actually has something to deliver.
+    let default_mode = ns_string::get_static_str(env, NSDefaultRunLoopMode);
+    let common_modes = ns_string::get_static_str(env, NSRunLoopCommonModes);
+    if !msg![env; mode isEqualToString:default_mode]
+        && !msg![env; mode isEqualToString:common_modes]
+    {
+        // Running the loop anyway is more useful than returning NO, which
+        // would likely leave the caller spinning in a tight loop.
+        log_dbg!(
+            "TODO: [(NSRunLoop*){:?} runMode:{:?} beforeDate:{:?}] with unhandled mode",
+            this,
+            ns_string::to_rust_string(env, mode),
+            date
+        );
+    }
+
+    let time_limit: NSTimeInterval = msg![env; date timeIntervalSince1970];
+    run_run_loop(env, this, /* single_iteration: */ true, Some(time_limit));
+    // We always give the loop a chance to run, so report that we did.
+    true
+}
+
 // TODO: other run methods
 
 @end
@@ -300,9 +333,8 @@ pub(super) fn cancel_perform_requests(
         .selector_objects = new_selector_objects;
 }
 
-/// Run the run loop for just a single iteration. This is a special mode just
-/// for the app picker, since we don't have `runMode:beforeDate:` yet.
-/// (TODO: implement those to replace this.)
+/// Run the run loop for just a single iteration. This is a convenience for the
+/// app picker; guest code uses `runMode:beforeDate:` instead.
 pub fn run_run_loop_single_iteration(env: &mut Environment, run_loop: id) {
     run_run_loop(env, run_loop, /* single_iteration: */ true, None)
 }
