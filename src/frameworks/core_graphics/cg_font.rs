@@ -10,6 +10,7 @@ use super::cg_data_provider::CGDataProviderRef;
 use super::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::font::Font;
+use crate::frameworks::uikit::ui_font::FontKind;
 use crate::frameworks::core_foundation::cf_data::CFDataRef;
 use crate::frameworks::core_foundation::{CFRelease, CFRetain, CFTypeRef};
 use crate::frameworks::core_graphics::cg_geometry::CGRectZero;
@@ -37,6 +38,29 @@ pub const CLASSES: ClassExports = objc_classes! {
 @end
 
 };
+
+/// Create a `CGFont` from one of the bundled fonts, used to back the legacy
+/// `CGContextSelectFont()` API which names a font rather than passing a
+/// `CGFontRef`.
+pub fn new_cg_font_from_kind(env: &mut Environment, kind: FontKind) -> CGFontRef {
+    let font = match kind {
+        FontKind::MonoRegular => Font::mono_regular(),
+        FontKind::MonoBold => Font::mono_bold(),
+        FontKind::MonoBoldItalic => Font::mono_bold_italic(),
+        FontKind::MonoItalic => Font::mono_italic(),
+        FontKind::SansRegular => Font::sans_regular(),
+        FontKind::SansBold => Font::sans_bold(),
+        FontKind::SansBoldItalic => Font::sans_bold_italic(),
+        FontKind::SansItalic => Font::sans_italic(),
+        FontKind::SerifRegular => Font::serif_regular(),
+        FontKind::SerifBold => Font::serif_bold(),
+        FontKind::SerifBoldItalic => Font::serif_bold_italic(),
+        FontKind::SerifItalic => Font::serif_italic(),
+    };
+    let host_obj = Box::new(CGFontHostObject { font });
+    let class = env.objc.get_known_class("_touchHLE_CGFont", &mut env.mem);
+    env.objc.alloc_object(class, host_obj, &mut env.mem)
+}
 
 fn CGFontCreateWithDataProvider(env: &mut Environment, provider: CGDataProviderRef) -> CGFontRef {
     let bytes = cg_data_provider::borrow_bytes(env, provider);

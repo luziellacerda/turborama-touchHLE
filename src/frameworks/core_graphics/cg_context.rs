@@ -11,11 +11,14 @@ use super::cg_color::CGColorRef;
 use super::cg_color_space::{
     kCGColorSpaceModelMonochrome, kCGColorSpaceModelRGB, CGColorSpaceGetModel, CGColorSpaceRef,
 };
-use super::cg_font::{CGFontHostObject, CGFontRef, CGFontRelease, CGFontRetain, CGGlyph};
+use super::cg_font::{
+    new_cg_font_from_kind, CGFontHostObject, CGFontRef, CGFontRelease, CGFontRetain, CGGlyph,
+};
 use super::cg_image::CGImageRef;
 use super::{cg_bitmap_context, cg_color, CGFloat, CGPoint, CGRect, CGSize};
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::core_foundation::{CFRelease, CFRetain, CFTypeRef};
+use crate::frameworks::foundation::unichar;
 use crate::frameworks::uikit;
 use crate::mem::{ConstPtr, GuestUSize};
 use crate::objc::{objc_classes, ClassExports, HostObject};
@@ -515,6 +518,88 @@ fn CGContextGetTextPosition(env: &mut Environment, context: CGContextRef) -> CGP
     res
 }
 
+/// Legacy API combining `CGContextSetFont()` and `CGContextSetFontSize()`,
+/// naming the font instead of taking a `CGFontRef`.
+fn CGContextSelectFont(
+    env: &mut Environment,
+    context: CGContextRef,
+    name: ConstPtr<u8>,
+    size: CGFloat,
+    text_encoding: i32,
+) {
+    let name_str = if name.is_null() {
+        String::new()
+    } else {
+        env.mem.cstr_at_utf8(name).unwrap_or("").to_string()
+    };
+
+    // The encoding only matters for CGContextShowText(), which treats bytes as
+    // MacRoman; for the ASCII range that apps actually use it makes no
+    // difference, so it is noted and otherwise ignored.
+    let kind = uikit::ui_font::get_equivalent_font(&name_str).unwrap_or_else(|| {
+        log!(
+            "CGContextSelectFont: no replacement for font {:?}, using the system font",
+            name_str
+        );
+        uikit::ui_font::FontKind::SansRegular
+    });
+    log_dbg!(
+        "CGContextSelectFont({:?}, {:?}, {}, encoding {})",
+        context,
+        name_str,
+        size,
+        text_encoding
+    );
+
+    let font = new_cg_font_from_kind(env, kind);
+    CGContextSetFont(env, context, font);
+    // CGContextSetFont() retains it, so drop our own reference.
+    CGFontRelease(env, font);
+    CGContextSetFontSize(env, context, size);
+}
+
+/// Legacy API drawing single-byte text at a point using the font previously
+/// chosen with `CGContextSelectFont()`.
+fn CGContextShowTextAtPoint(
+    env: &mut Environment,
+    context: CGContextRef,
+    x: CGFloat,
+    y: CGFloat,
+    string: ConstPtr<u8>,
+    length: GuestUSize,
+) {
+    let font = env.objc.borrow::<CGContextHostObject>(context).font;
+    if font.is_null() {
+        log!("CGContextShowTextAtPoint() with no font selected, ignoring");
+        return;
+    }
+
+    // Bytes are interpreted as MacRoman, which agrees with Latin-1 and ASCII
+    // over the range apps use in practice.
+    let mut glyph_ids = Vec::with_capacity(length as usize);
+    {
+        let host_font = &env.objc.borrow::<CGFontHostObject>(font).font;
+        for i in 0..length {
+            let byte = env.mem.read(string + i);
+            glyph_ids.push(host_font.glyph_id_for_char(byte as unichar));
+        }
+    }
+
+    show_glyph_ids_at_point(env, context, x, y, glyph_ids);
+}
+
+fn CGContextShowText(
+    env: &mut Environment,
+    context: CGContextRef,
+    string: ConstPtr<u8>,
+    length: GuestUSize,
+) {
+    // Without text position tracking the only sensible origin is the current
+    // one, which touchHLE keeps at zero; apps using this call generally set a
+    // text matrix first.
+    CGContextShowTextAtPoint(env, context, 0.0, 0.0, string, length);
+}
+
 fn CGContextShowGlyphsAtPoint(
     env: &mut Environment,
     context: CGContextRef,
@@ -529,6 +614,17 @@ fn CGContextShowGlyphsAtPoint(
         glyph_ids.push(rusttype::GlyphId(glyph_id));
     }
 
+    show_glyph_ids_at_point(env, context, x, y, glyph_ids);
+}
+
+/// Shared by the glyph-based and the legacy text-based drawing calls.
+fn show_glyph_ids_at_point(
+    env: &mut Environment,
+    context: CGContextRef,
+    x: CGFloat,
+    y: CGFloat,
+    glyph_ids: Vec<rusttype::GlyphId>,
+) {
     let font = env.objc.borrow::<CGContextHostObject>(context).font;
     let font_size = env.objc.borrow::<CGContextHostObject>(context).font_size;
     let text_transform = env
@@ -631,6 +727,9 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextSetTextDrawingMode(_, _)),
     export_c_func!(CGContextSetTextMatrix(_, _)),
     export_c_func!(CGContextGetTextPosition(_)),
+    export_c_func!(CGContextSelectFont(_, _, _, _)),
+    export_c_func!(CGContextShowTextAtPoint(_, _, _, _, _)),
+    export_c_func!(CGContextShowText(_, _, _)),
     export_c_func!(CGContextShowGlyphsAtPoint(_, _, _, _, _)),
     export_c_func!(CGContextShowGlyphsAtPositions(_, _, _, _)),
 ];

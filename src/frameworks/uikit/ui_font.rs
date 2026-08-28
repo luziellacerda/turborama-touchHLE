@@ -44,7 +44,7 @@ impl State {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-enum FontKind {
+pub enum FontKind {
     MonoRegular,
     MonoBold,
     MonoBoldItalic,
@@ -459,7 +459,7 @@ pub fn draw_in_rect(
     text_size
 }
 
-fn get_equivalent_font(system_font: &str) -> Option<FontKind> {
+pub fn get_equivalent_font(system_font: &str) -> Option<FontKind> {
     // Maps every font found in every font family in an iOS 2 Simulator
     match system_font {
         // Font Family: Courier
