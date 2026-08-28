@@ -214,6 +214,22 @@ pub const CLASSES: ClassExports = objc_classes! {
     autorelease(env, array_imm)
 }
 
+- (id)sortedArrayUsingDescriptors:(id)descriptors { // NSArray of NSSortDescriptor*
+    let array = msg![env; this mutableCopy];
+    () = msg![env; array sortUsingDescriptors:descriptors];
+    let array_imm = msg![env; array copy];
+    release(env, array);
+    autorelease(env, array_imm)
+}
+
+- (id)sortedArrayUsingSelector:(SEL)comparator {
+    let array = msg![env; this mutableCopy];
+    () = msg![env; array sortUsingSelector:comparator];
+    let array_imm = msg![env; array copy];
+    release(env, array);
+    autorelease(env, array_imm)
+}
+
 - (NSUInteger)hash {
     // TODO: define better hash
     msg![env; this count]
