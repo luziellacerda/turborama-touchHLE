@@ -2094,7 +2094,31 @@ pub fn get_bytes_buffer_inner(
             || encoding == NSASCIIStringEncoding
             || encoding == NSMacOSRomanStringEncoding
             || encoding == NSISOLatin1StringEncoding
+            || encoding == NSUnicodeStringEncoding
     );
+
+    // UTF-16: emit two little-endian bytes per code unit. NSUnicodeStringEncoding
+    // without a BOM is host byte order, which is little-endian on iPhone/ARM.
+    // This mirrors how -getCharacters: produces UTF-16 elsewhere in this file.
+    if encoding == NSUnicodeStringEncoding {
+        let mut bytes: Vec<u8> = env
+            .objc
+            .borrow::<StringHostObject>(str)
+            .iter_code_units()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        if include_null_terminator {
+            bytes.extend_from_slice(&[0, 0]); // UTF-16 NUL is two bytes
+        }
+        let dest = env.mem.bytes_at_mut(buffer, buffer_size);
+        if dest.len() < bytes.len() {
+            return false;
+        }
+        for (i, &byte) in bytes.iter().enumerate() {
+            dest[i] = byte;
+        }
+        return true;
+    }
 
     let src = to_rust_string(env, str);
     if encoding == NSASCIIStringEncoding
