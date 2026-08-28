@@ -493,6 +493,21 @@ fn CGContextSetTextMatrix(
         .text_transform = Some(transform);
 }
 
+fn CGContextGetTextPosition(env: &mut Environment, context: CGContextRef) -> CGPoint {
+    // touchHLE doesn't track a running text position separately; derive it from
+    // the text transform's translation, defaulting to the origin.
+    let res = match env
+        .objc
+        .borrow::<CGContextHostObject>(context)
+        .text_transform
+    {
+        Some(t) => CGPoint { x: t.tx, y: t.ty },
+        None => CGPoint { x: 0.0, y: 0.0 },
+    };
+    log_dbg!("CGContextGetTextPosition() => {:?}", res);
+    res
+}
+
 fn CGContextShowGlyphsAtPoint(
     env: &mut Environment,
     context: CGContextRef,
@@ -607,6 +622,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextSetFontSize(_, _)),
     export_c_func!(CGContextSetTextDrawingMode(_, _)),
     export_c_func!(CGContextSetTextMatrix(_, _)),
+    export_c_func!(CGContextGetTextPosition(_)),
     export_c_func!(CGContextShowGlyphsAtPoint(_, _, _, _, _)),
     export_c_func!(CGContextShowGlyphsAtPositions(_, _, _, _)),
 ];
