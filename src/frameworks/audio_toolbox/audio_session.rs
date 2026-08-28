@@ -10,7 +10,10 @@ use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::carbon_core::OSStatus;
 use crate::frameworks::core_audio_types::{debug_fourcc, fourcc};
 use crate::frameworks::core_foundation::cf_run_loop::{CFRunLoopMode, CFRunLoopRef};
+use crate::frameworks::core_foundation::cf_string::CFStringRef;
+use crate::frameworks::foundation::ns_string;
 use crate::mem::{guest_size_of, ConstVoidPtr, GuestUSize, MutPtr, MutVoidPtr};
+use crate::objc::msg;
 use crate::Environment;
 
 type AudioSessionInterruptionListener = GuestFunction;
@@ -32,6 +35,11 @@ const kAudioSessionProperty_PreferredHardwareSampleRate: AudioSessionPropertyID 
 
 const kAudioSessionCategory_SoloAmbientSound: u32 = fourcc(b"solo");
 const kAudioSessionProperty_CurrentHardwareIOBufferDuration: u32 = fourcc(b"chbd");
+const kAudioSessionProperty_AudioRoute: AudioSessionPropertyID = fourcc(b"rout");
+
+/// What `kAudioSessionProperty_AudioRoute` reports. touchHLE has no notion of
+/// headphones being plugged in, so playback always goes to the speaker.
+const AUDIO_ROUTE_SPEAKER: &str = "Speaker";
 
 pub struct State {
     audio_session_category: u32,
@@ -119,6 +127,13 @@ fn AudioSessionGetProperty(
         kAudioSessionProperty_CurrentHardwareOutputVolume => {
             let value: f32 = state.current_hardware_output_volume;
             env.mem.write(out_data.cast(), value);
+        }
+        kAudioSessionProperty_AudioRoute => {
+            // Apple documents the caller as owning the returned string, so it
+            // is retained here and released by the app.
+            let route = ns_string::get_static_str(env, AUDIO_ROUTE_SPEAKER);
+            let route: CFStringRef = msg![env; route retain];
+            env.mem.write(out_data.cast(), route);
         }
         kAudioSessionProperty_CurrentHardwareIOBufferDuration => {
             let value: f32 = state.current_hardware_io_buffer_duration;
@@ -230,6 +245,8 @@ fn get_audio_session_property_size(in_ID: AudioSessionPropertyID) -> GuestUSize 
         kAudioSessionProperty_CurrentHardwareOutputNumberChannels => guest_size_of::<u32>(),
         kAudioSessionProperty_CurrentHardwareOutputVolume => guest_size_of::<f32>(),
         kAudioSessionProperty_CurrentHardwareIOBufferDuration => guest_size_of::<f32>(),
+        // A CFStringRef naming the current output route.
+        kAudioSessionProperty_AudioRoute => guest_size_of::<CFStringRef>(),
         _ => unimplemented!("Unimplemented property ID: {}", debug_fourcc(in_ID)),
     }
 }
