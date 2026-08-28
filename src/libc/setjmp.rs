@@ -19,12 +19,19 @@ use crate::{abi, Environment};
 // frames, but we do not have a good way to detect that right now.
 // Thus, those are exempted from the check.
 // You need to have a good reason to extend this list!
-const ALLOWED_FOR_LONGJMP_BYPASS: [&str; 5] = [
+//
+// Monkey Island: SE is not Fuse-based, but does the same thing: its binary
+// contains an "Async Resources Fiber Manager" that runs resource loading on
+// setjmp/longjmp fibers, and the jump target's stack has a single frame while
+// the current one has several - the signature of a fiber switch rather than an
+// escape through host frames.
+const ALLOWED_FOR_LONGJMP_BYPASS: [&str; 6] = [
     "com.activision.CBNK2",
     "com.ea.fifa10.bv",
     "com.ea.fifa10inc",
     "com.ea.fifa10wc.bv",
     "com.ea.fifa10wc.inc",
+    "com.lucasarts.Monkey1",
 ];
 
 #[repr(C, packed)]
