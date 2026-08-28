@@ -1108,6 +1108,19 @@ pub(super) fn method_getImplementation(env: &mut Environment, method: Method) ->
     Ptr::from_bits(method_imp.addr_with_thumb_bit())
 }
 
+/// Shorthand for `method_getImplementation(class_getInstanceMethod(cls, sel))`,
+/// which is what the real runtime function does (it returns a message-forwarding
+/// function for unknown selectors, which touchHLE doesn't model; NULL is
+/// returned instead).
+pub(super) fn class_getMethodImplementation(
+    env: &mut Environment,
+    cls: Class,
+    sel: SEL,
+) -> MutVoidPtr {
+    let method = class_getInstanceMethod(env, cls, sel);
+    method_getImplementation(env, method)
+}
+
 pub(super) fn class_getSuperclass(env: &mut Environment, cls: Class) -> Class {
     if cls == nil {
         nil
