@@ -196,10 +196,34 @@ fn SCNetworkReachabilityScheduleWithRunLoop(
     true
 }
 
+fn SCNetworkReachabilityUnscheduleFromRunLoop(
+    env: &mut Environment,
+    target: SCNetworkReachabilityRef,
+    run_loop: CFRunLoopRef,
+    run_loop_mode: CFStringRef,
+) -> bool {
+    let target_class: Class = msg![env; target class];
+    assert_eq!(
+        target_class,
+        env.objc
+            .get_known_class("_touchHLE_SCNetworkReachability", &mut env.mem)
+    );
+    // Nothing was ever genuinely scheduled (see ScheduleWithRunLoop), so there's
+    // nothing to remove; report success.
+    log!(
+        "TODO: SCNetworkReachabilityUnscheduleFromRunLoop({:?}, {:?}, {:?}) -> TRUE",
+        target,
+        run_loop,
+        run_loop_mode
+    );
+    true
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(SCNetworkReachabilityCreateWithName(_, _)),
     export_c_func!(SCNetworkReachabilityCreateWithAddress(_, _)),
     export_c_func!(SCNetworkReachabilityGetFlags(_, _)),
     export_c_func!(SCNetworkReachabilitySetCallback(_, _, _)),
     export_c_func!(SCNetworkReachabilityScheduleWithRunLoop(_, _, _)),
+    export_c_func!(SCNetworkReachabilityUnscheduleFromRunLoop(_, _, _)),
 ];
