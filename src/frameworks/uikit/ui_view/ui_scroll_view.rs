@@ -60,6 +60,9 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())setDelaysContentTouches:(id)_delay_content_touches{
     // TODO
 }
+- (())setCanCancelContentTouches:(bool)_can_cancel {
+    // TODO
+}
 - (())setBounces:(id)_bounces {
     // TODO
 }
