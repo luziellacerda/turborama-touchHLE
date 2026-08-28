@@ -9,7 +9,7 @@ use super::ui_graphics::UIGraphicsGetCurrentContext;
 use crate::font::{Font, TextAlignment, WrapMode};
 use crate::frameworks::core_graphics::cg_bitmap_context::CGBitmapContextDrawer;
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
-use crate::frameworks::foundation::ns_string::to_rust_string;
+use crate::frameworks::foundation::ns_string::{self, to_rust_string};
 use crate::frameworks::foundation::NSInteger;
 use crate::objc::{autorelease, id, msg, objc_classes, ClassExports, HostObject};
 use crate::Environment;
@@ -152,7 +152,49 @@ pub const CLASSES: ClassExports = objc_classes! {
     let font = env.framework_state.uikit.ui_font.get_font_by_kind(host_object.kind);
     font.ascent(host_object.size)
 }
-- (CGFloat)descender {
+- (id)fontName {
+    // The original name isn't stored; derive a representative PostScript name
+    // from the resolved font kind.
+    let kind = env.objc.borrow::<UIFontHostObject>(this).kind;
+    let name = match kind {
+        FontKind::MonoRegular => "CourierNewPSMT",
+        FontKind::MonoBold => "CourierNewPS-BoldMT",
+        FontKind::MonoBoldItalic => "CourierNewPS-BoldItalicMT",
+        FontKind::MonoItalic => "CourierNewPS-ItalicMT",
+        FontKind::SansRegular => "Helvetica",
+        FontKind::SansBold => "Helvetica-Bold",
+        FontKind::SansBoldItalic => "Helvetica-BoldOblique",
+        FontKind::SansItalic => "Helvetica-Oblique",
+        FontKind::SerifRegular => "TimesNewRomanPSMT",
+        FontKind::SerifBold => "TimesNewRomanPS-BoldMT",
+        FontKind::SerifBoldItalic => "TimesNewRomanPS-BoldItalicMT",
+        FontKind::SerifItalic => "TimesNewRomanPS-ItalicMT",
+    };
+    let ns_name = ns_string::from_rust_string(env, name.to_string());
+    autorelease(env, ns_name)
+}
+- (id)familyName {
+    let kind = env.objc.borrow::<UIFontHostObject>(this).kind;
+    let name = match kind {
+        FontKind::MonoRegular
+        | FontKind::MonoBold
+        | FontKind::MonoBoldItalic
+        | FontKind::MonoItalic => "Courier New",
+        FontKind::SansRegular
+        | FontKind::SansBold
+        | FontKind::SansBoldItalic
+        | FontKind::SansItalic => "Helvetica",
+        FontKind::SerifRegular
+        | FontKind::SerifBold
+        | FontKind::SerifBoldItalic
+        | FontKind::SerifItalic => "Times New Roman",
+    };
+    let ns_name = ns_string::from_rust_string(env, name.to_string());
+    autorelease(env, ns_name)
+}
+- (CGFloat)pointSize {
+    env.objc.borrow::<UIFontHostObject>(this).size
+}- (CGFloat)descender {
     let host_object = env.objc.borrow::<UIFontHostObject>(this);
     let font = env.framework_state.uikit.ui_font.get_font_by_kind(host_object.kind);
     font.descent(host_object.size)
