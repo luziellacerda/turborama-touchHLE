@@ -404,6 +404,15 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)toValue {
     nil
 }
+- (id)byValue {
+    nil
+}
+- (())setFromValue:(id)_value {
+}
+- (())setToValue:(id)_value {
+}
+- (())setByValue:(id)_value {
+}
 
 @end
 
