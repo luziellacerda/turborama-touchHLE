@@ -413,6 +413,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (())setByValue:(id)_value {
 }
+- (id)keyPath {
+    nil
+}
+- (())setKeyPath:(id)_path {
+}
 
 @end
 
