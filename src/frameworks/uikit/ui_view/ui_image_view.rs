@@ -8,7 +8,7 @@
 use crate::frameworks::core_graphics::cg_image::CGImageRef;
 use crate::frameworks::core_graphics::{CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::ns_string::get_static_str;
-use crate::frameworks::foundation::NSTimeInterval;
+use crate::frameworks::foundation::{NSInteger, NSTimeInterval};
 use crate::objc::{
     id, impl_HostObject_with_superclass, msg, msg_super, objc_classes, release, retain,
     todo_objc_setter, ClassExports, NSZonePtr,
@@ -100,6 +100,10 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (())setAnimationDuration:(NSTimeInterval)duration { // NSArray<UIImage *>*
     todo_objc_setter!(this, duration);
+}
+
+- (())setAnimationRepeatCount:(NSInteger)count {
+    todo_objc_setter!(this, count);
 }
 
 - (())startAnimating {
