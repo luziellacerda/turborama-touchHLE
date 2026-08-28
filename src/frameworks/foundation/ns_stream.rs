@@ -12,7 +12,7 @@
 //! incremental I/O pipeline.
 
 use crate::frameworks::foundation::{NSInteger, NSRange, NSUInteger};
-use crate::mem::{ConstVoidPtr, MutPtr};
+use crate::mem::{ConstPtr, ConstVoidPtr, MutPtr};
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
     NSZonePtr,
@@ -35,6 +35,19 @@ struct NSInputStreamHostObject {
     status: NSInteger,
 }
 impl HostObject for NSInputStreamHostObject {}
+
+#[derive(Default)]
+struct NSOutputStreamHostObject {
+    /// Path the stream writes to (retained NSString), or nil.
+    path: id,
+    /// Whether to append to (rather than overwrite) the file.
+    append: bool,
+    /// Accumulated bytes to be flushed to the file (retained NSMutableData),
+    /// or nil before opening.
+    buffer: id,
+    status: NSInteger,
+}
+impl HostObject for NSOutputStreamHostObject {}
 
 pub const CLASSES: ClassExports = objc_classes! {
 
@@ -139,6 +152,97 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 // Delegate / run-loop scheduling: accepted but unused, since reads are
+// synchronous here.
+- (())setDelegate:(id)_delegate {
+}
+- (id)delegate {
+    nil
+}
+- (())scheduleInRunLoop:(id)_run_loop forMode:(id)_mode {
+}
+- (())removeFromRunLoop:(id)_run_loop forMode:(id)_mode {
+}
+
+@end
+
+@implementation NSOutputStream: NSStream
+
++ (id)allocWithZone:(NSZonePtr)_zone {
+    let host_object = Box::new(NSOutputStreamHostObject {
+        status: NSStreamStatusNotOpen,
+        ..Default::default()
+    });
+    env.objc.alloc_object(this, host_object, &mut env.mem)
+}
+
++ (id)outputStreamToFileAtPath:(id)path append:(bool)append { // NSString*
+    let new: id = msg![env; this alloc];
+    let new: id = msg![env; new initToFileAtPath:path append:append];
+    autorelease(env, new)
+}
+
+- (id)initToFileAtPath:(id)path append:(bool)append { // NSString*
+    retain(env, path);
+    let host = env.objc.borrow_mut::<NSOutputStreamHostObject>(this);
+    host.path = path;
+    host.append = append;
+    this
+}
+
+- (())dealloc {
+    let &NSOutputStreamHostObject { path, buffer, .. } =
+        env.objc.borrow::<NSOutputStreamHostObject>(this);
+    release(env, path);
+    release(env, buffer);
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+
+- (())open {
+    let &NSOutputStreamHostObject { path, append, .. } =
+        env.objc.borrow::<NSOutputStreamHostObject>(this);
+    // Start from the existing file contents when appending, otherwise from an
+    // empty buffer.
+    let buffer: id = msg_class![env; NSMutableData data];
+    if append && path != nil {
+        let existing: id = msg_class![env; NSData dataWithContentsOfFile:path];
+        if existing != nil {
+            () = msg![env; buffer appendData:existing];
+        }
+    }
+    retain(env, buffer);
+    let host = env.objc.borrow_mut::<NSOutputStreamHostObject>(this);
+    host.buffer = buffer;
+    host.status = NSStreamStatusOpen;
+}
+
+- (())close {
+    let &NSOutputStreamHostObject { path, buffer, .. } =
+        env.objc.borrow::<NSOutputStreamHostObject>(this);
+    if buffer != nil && path != nil {
+        let _success: bool = msg![env; buffer writeToFile:path atomically:false];
+    }
+    env.objc.borrow_mut::<NSOutputStreamHostObject>(this).status = NSStreamStatusClosed;
+}
+
+- (NSInteger)streamStatus {
+    env.objc.borrow::<NSOutputStreamHostObject>(this).status
+}
+
+- (bool)hasSpaceAvailable {
+    let status = env.objc.borrow::<NSOutputStreamHostObject>(this).status;
+    status == NSStreamStatusOpen
+}
+
+- (NSInteger)write:(ConstPtr<u8>)buffer maxLength:(NSUInteger)length {
+    let data_buffer = env.objc.borrow::<NSOutputStreamHostObject>(this).buffer;
+    if data_buffer == nil {
+        return -1;
+    }
+    () = msg![env; data_buffer appendBytes:buffer length:length];
+    length.try_into().unwrap()
+}
+
+// Delegate / run-loop scheduling: accepted but unused, since writes are
 // synchronous here.
 - (())setDelegate:(id)_delegate {
 }
