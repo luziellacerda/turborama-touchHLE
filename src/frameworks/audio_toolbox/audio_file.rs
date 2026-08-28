@@ -60,6 +60,7 @@ pub const kAudioFileReadPermission: AudioFilePermissions = 1;
 type AudioFileTypeID = u32;
 const kAudioFileCAFType: AudioFileTypeID = fourcc(b"caff");
 const kAUdioFileAIFFType: AudioFileTypeID = fourcc(b"AIFF");
+const kAudioFileMP3Type: AudioFileTypeID = fourcc(b"MPG3");
 
 /// Usually a FourCC.
 type AudioFilePropertyID = u32;
@@ -86,7 +87,10 @@ pub fn AudioFileOpenURL(
 
     // The hint is optional and is supposed to only be used for certain file
     // formats that can't be uniquely identified, which we don't support so far.
-    // Hints for well-known types are ignored as well.
+    // Hints for well-known types are ignored as well, and so is anything else:
+    // the format is detected from the file itself, so an unrecognised hint is
+    // no reason to fail. Aborting here turned a perfectly playable file into a
+    // crash whenever an app named a type touchHLE had no constant for.
     match in_file_type_hint {
         0 => {}
         kAudioFileCAFType => {
@@ -95,7 +99,16 @@ pub fn AudioFileOpenURL(
         kAUdioFileAIFFType => {
             log!("Ignoring 'AIFF' file type hint for AudioFileOpenURL()");
         }
-        _ => unimplemented!(),
+        kAudioFileMP3Type => {
+            log!("Ignoring 'MPG3' file type hint for AudioFileOpenURL()");
+        }
+        other => {
+            log!(
+                "Ignoring unrecognised file type hint {:?} ({:#x}) for AudioFileOpenURL()",
+                std::str::from_utf8(&other.to_be_bytes()).unwrap_or("????"),
+                other
+            );
+        }
     }
 
     let path = to_rust_path(env, in_file_ref);
