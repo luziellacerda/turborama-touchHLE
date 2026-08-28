@@ -252,11 +252,16 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())layoutSubviews {
     let label = env.objc.borrow_mut::<UIButtonHostObject>(this).title_label;
     let background_image_view = env.objc.borrow_mut::<UIButtonHostObject>(this).background_image_view;
+    let image_view = env.objc.borrow_mut::<UIButtonHostObject>(this).image_view;
     let bounds: CGRect = msg![env; this bounds];
 
     () = msg![env; background_image_view setFrame:bounds];
     () = msg![env; label setFrame:bounds];
-    // TODO: layout for image
+    // The image view is laid out over the button's bounds too. iOS centres the
+    // image at its natural size, but stretching to bounds is close enough for
+    // the image-based buttons games typically use, and crucially gives the
+    // image view a non-zero frame so its image is actually visible.
+    () = msg![env; image_view setFrame:bounds];
 
 }
 
