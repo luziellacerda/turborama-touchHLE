@@ -108,7 +108,21 @@ pub fn pthread_cond_init(
     };
     env.mem.write(cond, opaque);
 
-    assert!(!State::get(env).condition_variables.contains_key(&cond));
+    // Re-initialising a cond that is already registered is undefined per POSIX,
+    // but real implementations tolerate it and apps do it - typically without
+    // destroying the old one first. pthread_mutex_init() here is equally
+    // permissive, so match that instead of aborting. Any threads waiting on the
+    // old cond would be stranded, but that is the app's doing, and losing them
+    // beats losing the whole emulator.
+    if let Some(old) = State::get(env).condition_variables.get(&cond) {
+        log!(
+            "Warning: pthread_cond_init() on already-initialised cond {:?} \
+             ({} waiting, {} waking); replacing it.",
+            cond,
+            old.waiting.len(),
+            old.waking.len()
+        );
+    }
     State::get_mut(env).condition_variables.insert(
         cond,
         CondHostObject {
