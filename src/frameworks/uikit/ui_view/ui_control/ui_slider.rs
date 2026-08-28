@@ -5,10 +5,11 @@
  */
 //! `UISlider`.
 
+use super::UIControlState;
 use crate::frameworks::core_graphics::CGRect;
 use crate::objc::{
-    id, impl_HostObject_with_superclass, msg_super, objc_classes, todo_objc_setter, ClassExports,
-    NSZonePtr,
+    id, impl_HostObject_with_superclass, msg_super, nil, objc_classes, todo_objc_setter,
+    ClassExports, NSZonePtr,
 };
 
 pub struct UISliderHostObject {
@@ -56,6 +57,30 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (())setMaximumValueImage:(id)img { // UIImage *
     todo_objc_setter!(this, img);
+}
+
+// State-dependent images. The slider isn't rendered, so these have no effect,
+// but apps set them while configuring the control.
+- (())setThumbImage:(id)_img // UIImage *
+           forState:(UIControlState)_state {
+}
+- (())setMinimumTrackImage:(id)_img // UIImage *
+                  forState:(UIControlState)_state {
+}
+- (())setMaximumTrackImage:(id)_img // UIImage *
+                  forState:(UIControlState)_state {
+}
+- (id)thumbImageForState:(UIControlState)_state {
+    nil
+}
+- (id)minimumTrackImageForState:(UIControlState)_state {
+    nil
+}
+- (id)maximumTrackImageForState:(UIControlState)_state {
+    nil
+}
+- (id)currentThumbImage {
+    nil
 }
 
 - (f32)value {
