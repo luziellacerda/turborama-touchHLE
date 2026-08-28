@@ -106,6 +106,16 @@ struct CABasicAnimationHostObject {
 }
 impl_HostObject_with_superclass!(CABasicAnimationHostObject);
 
+#[derive(Default)]
+struct CAKeyframeAnimationHostObject {
+    superclass: CAPropertyAnimationHostObject,
+    values: id,
+    key_times: id,
+    path: id,
+    calculation_mode: id,
+}
+impl_HostObject_with_superclass!(CAKeyframeAnimationHostObject);
+
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
@@ -297,6 +307,75 @@ pub const CLASSES: ClassExports = objc_classes! {
     }
     if to_value != nil {
         release(env, to_value);
+    }
+
+    msg_super![env; this dealloc]
+}
+
+@end
+
+
+@implementation CAKeyframeAnimation: CAPropertyAnimation
+
++ (id)allocWithZone:(NSZonePtr)_zone {
+    let host_object = Box::<CAKeyframeAnimationHostObject>::default();
+    env.objc.alloc_object(this, host_object, &mut env.mem)
+}
+
+- (())setValues:(id)values { // NSArray*
+    let old = env.objc.borrow::<CAKeyframeAnimationHostObject>(this).values;
+    retain(env, values);
+    if old != nil {
+        release(env, old);
+    }
+    env.objc.borrow_mut::<CAKeyframeAnimationHostObject>(this).values = values;
+}
+- (id)values {
+    env.objc.borrow::<CAKeyframeAnimationHostObject>(this).values
+}
+
+- (())setKeyTimes:(id)key_times { // NSArray*
+    let old = env.objc.borrow::<CAKeyframeAnimationHostObject>(this).key_times;
+    retain(env, key_times);
+    if old != nil {
+        release(env, old);
+    }
+    env.objc.borrow_mut::<CAKeyframeAnimationHostObject>(this).key_times = key_times;
+}
+- (id)keyTimes {
+    env.objc.borrow::<CAKeyframeAnimationHostObject>(this).key_times
+}
+
+- (())setPath:(id)path { // CGPathRef
+    env.objc.borrow_mut::<CAKeyframeAnimationHostObject>(this).path = path;
+}
+- (id)path {
+    env.objc.borrow::<CAKeyframeAnimationHostObject>(this).path
+}
+
+- (())setCalculationMode:(id)calculation_mode { // NSString*
+    let old = env.objc.borrow::<CAKeyframeAnimationHostObject>(this).calculation_mode;
+    retain(env, calculation_mode);
+    if old != nil {
+        release(env, old);
+    }
+    env.objc.borrow_mut::<CAKeyframeAnimationHostObject>(this).calculation_mode = calculation_mode;
+}
+- (id)calculationMode {
+    env.objc.borrow::<CAKeyframeAnimationHostObject>(this).calculation_mode
+}
+
+- (())dealloc {
+    let &CAKeyframeAnimationHostObject { values, key_times, calculation_mode, .. } =
+        env.objc.borrow(this);
+    if values != nil {
+        release(env, values);
+    }
+    if key_times != nil {
+        release(env, key_times);
+    }
+    if calculation_mode != nil {
+        release(env, calculation_mode);
     }
 
     msg_super![env; this dealloc]
