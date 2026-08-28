@@ -151,6 +151,16 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.borrow::<UITableViewCellHostObject>(this).accessory_type
 }
 
+// Deprecated (pre-iOS-3.0) direct text accessors: forward to the text label.
+- (())setText:(id)text { // NSString*
+    let label: id = msg![env; this textLabel];
+    () = msg![env; label setText:text];
+}
+- (id)text {
+    let label: id = msg![env; this textLabel];
+    msg![env; label text]
+}
+
 // Selection is a no-op for now (nothing is visually rendered differently).
 - (())setSelected:(bool)_selected animated:(bool)_animated {
 }
