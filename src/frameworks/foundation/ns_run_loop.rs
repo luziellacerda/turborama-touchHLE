@@ -114,7 +114,13 @@ pub const CLASSES: ClassExports = objc_classes! {
     retain(env, timer);
 
     let host_object = env.objc.borrow_mut::<NSRunLoopHostObject>(this);
-    assert!(!host_object.timers.contains(&timer)); // TODO: what do we do here?
+    if host_object.timers.contains(&timer) {
+        // The timer is already scheduled in this run loop. On iOS adding it
+        // again is a no-op, so we just undo the retain we did above and return,
+        // rather than registering it twice (or crashing).
+        release(env, timer);
+        return;
+    }
     host_object.timers.push(timer);
     ns_timer::set_run_loop(env, timer, this);
 }
