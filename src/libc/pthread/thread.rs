@@ -203,6 +203,20 @@ fn pthread_attr_getschedparam(
     env.mem.write(param, sched_param { sched_priority: 0 });
     0 // success
 }
+fn pthread_attr_getschedpolicy(
+    env: &mut Environment,
+    attr: MutPtr<pthread_attr_t>,
+    policy: MutPtr<i32>,
+) -> i32 {
+    if attr.is_null() {
+        return EINVAL;
+    }
+    check_magic!(env, attr, MAGIC_ATTR);
+    // Scheduling policy isn't tracked (setschedpolicy ignores it); report the
+    // default, SCHED_OTHER (1 on Apple platforms).
+    env.mem.write(policy, 1);
+    0 // success
+}
 fn pthread_attr_destroy(env: &mut Environment, attr: MutPtr<pthread_attr_t>) -> i32 {
     check_magic!(env, attr, MAGIC_ATTR);
     env.mem.write(
@@ -447,6 +461,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(sched_get_priority_min(_)),
     export_c_func!(pthread_attr_setschedparam(_, _)),
     export_c_func!(pthread_attr_getschedparam(_, _)),
+    export_c_func!(pthread_attr_getschedpolicy(_, _)),
     export_c_func!(pthread_attr_destroy(_)),
     export_c_func!(pthread_create(_, _, _, _)),
     export_c_func!(pthread_equal(_, _)),
