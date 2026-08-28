@@ -65,6 +65,11 @@ const KNOWN_OPTIONAL_SYMBOLS: &[&str] = &[
     // introduced in iOS 4.1, so older-minimum-OS apps check for it before
     // using it).
     "__gameCenterIsGameCenterAvailable",
+    // Some apps (e.g. ngmoco titles) look up this notification-name constant
+    // via dlsym to conditionally register for memory warnings. It's a data
+    // constant rather than a function, so dlsym's function lookup can't resolve
+    // it; returning NULL lets the app skip the optional feature.
+    "_UIApplicationDidReceiveMemoryWarningNotification",
 ];
 
 fn dlsym(env: &mut Environment, handle: MutVoidPtr, symbol: ConstPtr<u8>) -> MutVoidPtr {
