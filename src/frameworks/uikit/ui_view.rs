@@ -166,6 +166,17 @@ pub const CLASSES: ClassExports = objc_classes! {
     () = msg_class![env; CATransaction setAnimationDuration:duration];
 }
 
++ (())setAnimationsEnabled:(bool)enabled {
+    log_dbg!("[UIView setAnimationsEnabled:{:?}]", enabled);
+    // "Animations enabled" is the inverse of CoreAnimation's "disable actions".
+    () = msg_class![env; CATransaction setDisableActions:(!enabled)];
+}
+
++ (bool)areAnimationsEnabled {
+    let disabled: bool = msg_class![env; CATransaction disableActions];
+    !disabled
+}
+
 + (())setAnimationDelay:(NSTimeInterval)delay {
     log_dbg!("[UIView setAnimationDelay:{:?}]", delay);
     let value: id = msg_class![env; NSNumber numberWithDouble:delay];
