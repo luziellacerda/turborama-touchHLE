@@ -8,7 +8,7 @@
 use crate::frameworks::foundation::ns_string::{get_static_str, to_rust_string};
 use crate::msg;
 use crate::objc::{
-    id, impl_HostObject_with_superclass, nil, objc_classes, ClassExports, NSZonePtr,
+    id, impl_HostObject_with_superclass, msg_super, nil, objc_classes, ClassExports, NSZonePtr,
 };
 use crate::Environment;
 use std::borrow::Cow;
@@ -60,8 +60,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 // NSCoding implementation
-- (id)initWithCoder:(id)_coder {
-    todo!()
+- (id)initWithCoder:(id)coder {
+    // The web view isn't actually rendered, so there are no web-view-specific
+    // archived properties to decode; UIView's initWithCoder: handles the
+    // standard view geometry from the NIB.
+    msg_super![env; this initWithCoder:coder]
 }
 
 - (())setScalesPageToFit:(bool)_scales {
