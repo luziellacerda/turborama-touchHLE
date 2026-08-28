@@ -350,6 +350,19 @@ fn unarchive_key(env: &mut Environment, unarchiver: id, key: Uid) -> id {
             let number: id = msg_class![env; NSNumber alloc];
             msg![env; number initWithDouble:val]
         }
+        Value::Data(d) => {
+            // Copy out of the plist first: the borrow of the host object must
+            // end before `env.mem` can be borrowed mutably (as in the String
+            // and Integer arms above).
+            let d = d.to_vec();
+            let length: NSUInteger = d.len().try_into().unwrap();
+            let alloc: MutVoidPtr = env.mem.alloc(length);
+            env.mem
+                .bytes_at_mut(alloc.cast(), length)
+                .copy_from_slice(&d);
+            let ns_data: id = msg_class![env; NSData alloc];
+            msg![env; ns_data initWithBytesNoCopy:alloc length:length]
+        }
         _ => unimplemented!("Unarchive: {:#?}", item),
     };
 
