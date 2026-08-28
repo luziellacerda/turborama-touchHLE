@@ -450,6 +450,33 @@ pub(super) fn objc_msgSendSuper2(
     )
 }
 
+/// Combination of [objc_msgSendSuper2] and [objc_msgSend_stret]: a supercall
+/// that returns a large struct. The `_stret` pointer occupies the first
+/// argument slot (as in the stret ABI), followed by the [objc_super] pointer.
+#[allow(non_snake_case)]
+pub(super) fn objc_msgSendSuper2_stret(
+    env: &mut Environment,
+    _stret: MutVoidPtr,
+    super_ptr: ConstPtr<objc_super>,
+    selector: SEL,
+) {
+    let objc_super { receiver, class } = env.mem.read(super_ptr);
+
+    // Rewrite the super pointer argument to the real receiver, matching the
+    // normal ABI. The receiver is in the second slot here because the first is
+    // taken by the stret return pointer.
+    crate::abi::write_next_arg(&mut 1, env.cpu.regs_mut(), &mut env.mem, receiver);
+
+    objc_msgSend_inner(
+        env,
+        receiver,
+        selector,
+        /* super2: */ Some(class),
+        /* tolerate_type_mismatch: */ false,
+        /* skip_initialize: */ false,
+    )
+}
+
 /// Trait that assists with type-checking of [msg_send]'s arguments.
 ///
 /// - Statically constrains the types of [msg_send]'s arguments so that the

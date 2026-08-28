@@ -50,7 +50,10 @@ use classes::{
     method_getImplementation, objc_getClass, ClassHostObject, FakeClass, UnimplementedClass,
 };
 pub(crate) use messages::objc_msgSend;
-use messages::{objc_msgSendSuper2, objc_msgSend_stret, MsgSendSignature, MsgSendSuperSignature};
+use messages::{
+    objc_msgSendSuper2, objc_msgSendSuper2_stret, objc_msgSend_stret, MsgSendSignature,
+    MsgSendSuperSignature,
+};
 use methods::method_list_t;
 use objects::{objc_object, object_getClass, HostObjectEntry};
 use properties::{ivar_list_t, objc_copyStruct, objc_getProperty, objc_setProperty};
@@ -149,6 +152,7 @@ const FUNCTIONS: FunctionExports = &[
     export_c_func!(objc_msgSend(_, _)),
     export_c_func!(objc_msgSend_stret(_, _, _)),
     export_c_func!(objc_msgSendSuper2(_, _)),
+    export_c_func!(objc_msgSendSuper2_stret(_, _, _)),
     export_c_func!(objc_getClass(_)),
     export_c_func!(objc_getProperty(_, _, _, _)),
     export_c_func!(objc_setProperty(_, _, _, _, _, _)),
