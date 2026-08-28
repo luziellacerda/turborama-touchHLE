@@ -179,6 +179,14 @@ pub const CLASSES: ClassExports = objc_classes! {
     ns_array::from_vec(env, objects)
 }
 
+// NSMutableCopying implementation
+- (id)mutableCopyWithZone:(NSZonePtr)_zone {
+    let objects: id = msg![env; this allObjects];
+    let new: id = msg_class![env; NSMutableSet alloc];
+    let new: id = msg![env; new initWithArray:objects];
+    new
+}
+
 - (id)objectEnumerator { // NSEnumerator*
     let array: id = msg![env; this allObjects];
     msg![env; array objectEnumerator]
@@ -288,6 +296,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 // TODO: more mutation methods
+
+// NSMutableCopying implementation
+- (id)mutableCopyWithZone:(NSZonePtr)_zone {
+    let objects: id = msg![env; this allObjects];
+    let new: id = msg_class![env; NSMutableSet alloc];
+    let new: id = msg![env; new initWithArray:objects];
+    new
+}
 
 - (())addObject:(id)object {
     let null: id = msg_class![env; NSNull null];
