@@ -293,15 +293,19 @@ pub fn AudioFileGetProperty(
 
     match in_property_id {
         kAudioFilePropertyFileFormat => {
-            let bundle_id = env.bundle.bundle_identifier();
-            if bundle_id.starts_with("com.ea.mirrorsedge.bv")
-                || bundle_id.starts_with("com.ea.mirrorsedge.inc")
-            {
-                log!("Applying game-specific hack for Mirror's Edge: returning WAVE for kAudioFilePropertyFileFormat in AudioFileGetProperty()");
-                env.mem.write(out_property_data.cast(), fourcc(b"WAVE"));
-            } else {
-                todo!()
-            }
+            let fourcc_bytes = host_object.audio_file.file_type_id().unwrap_or_else(|| {
+                // The container couldn't be identified (a Symphonia-decoded or
+                // silence-fallback file). Games that query this generally expect
+                // WAVE, and the previous implementation always returned WAVE
+                // here, so fall back to that rather than crashing.
+                log!(
+                    "Warning: kAudioFilePropertyFileFormat for an unidentified \
+                     audio container; assuming WAVE"
+                );
+                *b"WAVE"
+            });
+            env.mem
+                .write(out_property_data.cast(), fourcc(&fourcc_bytes));
         }
         kAudioFilePropertyDataFormat => {
             let desc = AudioStreamBasicDescription::from_audio_description(

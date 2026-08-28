@@ -121,6 +121,19 @@ impl AudioFile {
         }
     }
 
+    /// The file's container format, as a four-character code suitable for
+    /// `kAudioFilePropertyFileFormat` (e.g. `WAVE`). Returns `None` for formats
+    /// whose original container can't be identified after decoding.
+    pub fn file_type_id(&self) -> Option<[u8; 4]> {
+        match self.0 {
+            AudioFileInner::Wave(_) => Some(*b"WAVE"),
+            // Symphonia decodes several container formats (MP3, AAC, ...) to PCM
+            // and doesn't retain which one; the Silence fallback stands in for a
+            // file we couldn't decode at all. Neither can report a real format.
+            AudioFileInner::Symphonia(_) | AudioFileInner::Silence { .. } => None,
+        }
+    }
+
     pub fn audio_description(&self) -> AudioDescription {
         match self.0 {
             AudioFileInner::Wave(ref wave_reader) => {
