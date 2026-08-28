@@ -802,7 +802,13 @@ pub const CLASSES: ClassExports = objc_classes! {
         let host_object = Box::new(StringHostObject::Utf16(utf16));
         env.objc.alloc_object(class, host_object, &mut env.mem)
     }).collect();
-    let array = ns_array::from_vec(env, component_ns_strings);
+    // The declared return type is NSArray, but on iPhone OS these arrays were
+    // CFArray-backed and tolerated mutation. Apps of the era relied on that,
+    // e.g. calling removeObjectAtIndex: on the result. Returning an
+    // NSMutableArray is type-compatible (it is an NSArray subclass) and keeps
+    // such apps working; the cost is that isKindOfClass:[NSMutableArray class]
+    // now answers YES, which is a far less likely thing for an app to check.
+    let array = ns_array::mutable_from_vec(env, component_ns_strings);
     autorelease(env, array)
 }
 
@@ -1575,7 +1581,9 @@ pub const CLASSES: ClassExports = objc_classes! {
         from_u16_vec(env, substr.to_vec())
     }).collect();
 
-    let res = ns_array::from_vec(env, substrings);
+    // Mutable for the same compatibility reason as componentsSeparatedByString:
+    // above.
+    let res = ns_array::mutable_from_vec(env, substrings);
     autorelease(env, res)
 }
 
