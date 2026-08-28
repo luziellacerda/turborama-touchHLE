@@ -29,6 +29,10 @@ pub struct UITableViewHostObject {
     delegate: id,
     row_height: CGFloat,
     style: NSInteger,
+    /// Cells laid out by the last reloadData, as (row, UITableViewCell*) pairs
+    /// for section 0, so cellForRowAtIndexPath: can return a real cell instead
+    /// of nil (apps may dereference the result).
+    visible_cells: Vec<(NSInteger, id)>,
 }
 impl_HostObject_with_superclass!(UITableViewHostObject);
 impl Default for UITableViewHostObject {
@@ -39,6 +43,7 @@ impl Default for UITableViewHostObject {
             delegate: nil,
             row_height: DEFAULT_ROW_HEIGHT,
             style: 0,
+            visible_cells: Vec::new(),
         }
     }
 }
@@ -94,9 +99,20 @@ pub const CLASSES: ClassExports = objc_classes! {
     nil
 }
 
-- (id)cellForRowAtIndexPath:(id)_index_path {
-    // Not tracked after layout; callers generally tolerate nil here.
-    nil
+- (id)cellForRowAtIndexPath:(id)index_path {
+    let row: NSInteger = if index_path == nil {
+        -1
+    } else {
+        let r: NSUInteger = msg![env; index_path row];
+        r as NSInteger
+    };
+    env.objc
+        .borrow::<UITableViewHostObject>(this)
+        .visible_cells
+        .iter()
+        .find(|&&(r, _)| r == row)
+        .map(|&(_, cell)| cell)
+        .unwrap_or(nil)
 }
 
 - (())reloadData {
@@ -104,6 +120,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     if data_source == nil {
         return;
     }
+    env.objc.borrow_mut::<UITableViewHostObject>(this).visible_cells.clear();
 
     // Remove previously laid-out cells. (We re-add everything below.)
     let old_subviews: id = msg![env; this subviews];
@@ -140,6 +157,10 @@ pub const CLASSES: ClassExports = objc_classes! {
             };
             () = msg![env; cell setFrame:cell_frame];
             () = msg![env; this addSubview:cell];
+            env.objc
+                .borrow_mut::<UITableViewHostObject>(this)
+                .visible_cells
+                .push((row, cell));
         }
         y += row_height;
     }
