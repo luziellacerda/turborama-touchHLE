@@ -166,6 +166,58 @@ fn atof(env: &mut Environment, s: ConstPtr<u8>) -> f64 {
     strtod(env, s, Ptr::null())
 }
 
+/// Legacy BSD function: format `value` into `buf` with `ndigit` significant
+/// digits, choosing between `%e` and `%f` style the way `%g` does, and return
+/// `buf`.
+///
+/// The caller supplies the buffer and is responsible for its size; there is no
+/// way to bound the write, which is why the function was eventually removed
+/// from POSIX.
+fn gcvt(env: &mut Environment, value: f64, ndigit: i32, buf: MutPtr<u8>) -> MutPtr<u8> {
+    // Rust's {:e} writes an exponent without the zero padding and sign that C
+    // uses ("1e5" vs "1.00000e+05"), so the exponent form is assembled by hand.
+    let ndigit = ndigit.clamp(1, 17) as usize;
+
+    let formatted = if value == 0.0 {
+        "0".to_string()
+    } else {
+        let exponent = value.abs().log10().floor() as i32;
+        // This is the %g rule: exponent form outside [-4, ndigit).
+        if exponent < -4 || exponent >= ndigit as i32 {
+            let mantissa = value / 10f64.powi(exponent);
+            let mantissa = format!("{:.*}", ndigit - 1, mantissa);
+            // Trailing zeroes are dropped, as %g does.
+            let mantissa = if mantissa.contains('.') {
+                mantissa.trim_end_matches('0').trim_end_matches('.').to_string()
+            } else {
+                mantissa
+            };
+            format!(
+                "{}e{}{:02}",
+                mantissa,
+                if exponent < 0 { '-' } else { '+' },
+                exponent.abs()
+            )
+        } else {
+            let decimals = (ndigit as i32 - 1 - exponent).max(0) as usize;
+            let fixed = format!("{:.*}", decimals, value);
+            if fixed.contains('.') {
+                fixed.trim_end_matches('0').trim_end_matches('.').to_string()
+            } else {
+                fixed
+            }
+        }
+    };
+
+    log_dbg!("gcvt({}, {}, {:?}) => {:?}", value, ndigit, buf, formatted);
+
+    let bytes = formatted.as_bytes();
+    let dest = env.mem.bytes_at_mut(buf, bytes.len() as u32 + 1);
+    dest[..bytes.len()].copy_from_slice(bytes);
+    dest[bytes.len()] = b'\0';
+    buf
+}
+
 fn strtod(env: &mut Environment, nptr: ConstPtr<u8>, endptr: MutPtr<MutPtr<u8>>) -> f64 {
     // TODO: handle errno properly
     set_errno(env, 0);
@@ -649,6 +701,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(atol(_)),
     export_c_func!(atof(_)),
     export_c_func!(strtod(_, _)),
+    export_c_func!(gcvt(_, _, _)),
     export_c_func!(srand(_)),
     export_c_func!(sranddev()),
     export_c_func!(rand()),
