@@ -7,8 +7,10 @@
 
 use std::ops::{Add, Mul, Sub};
 
-use crate::dyld::{export_c_func, FunctionExports};
+use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
+use crate::frameworks::core_foundation::cf_string::CFStringRef;
 use crate::frameworks::core_foundation::{CFRelease, CFRetain, CFTypeRef};
+use crate::frameworks::foundation::ns_string::to_rust_string;
 use crate::frameworks::core_graphics::cg_color_space::{
     kCGColorSpaceGenericRGB, CGColorSpaceHostObject, CGColorSpaceRef,
 };
@@ -128,6 +130,27 @@ fn CGColorGetAlpha(env: &mut Environment, color: CGColorRef) -> CGFloat {
     to_rgba(&env.objc, color).3
 }
 
+pub const kCGColorWhite: &str = "kCGColorWhite";
+pub const kCGColorBlack: &str = "kCGColorBlack";
+pub const kCGColorClear: &str = "kCGColorClear";
+
+fn CGColorGetConstantColor(env: &mut Environment, color_name: CFStringRef) -> CGColorRef {
+    let name = to_rust_string(env, color_name);
+    let rgba: (CGFloat, CGFloat, CGFloat, CGFloat) = match &*name {
+        "kCGColorWhite" => (1.0, 1.0, 1.0, 1.0),
+        "kCGColorBlack" => (0.0, 0.0, 0.0, 1.0),
+        "kCGColorClear" => (0.0, 0.0, 0.0, 0.0),
+        _ => {
+            log!(
+                "Warning: CGColorGetConstantColor({:?}) unknown name, returning opaque black",
+                name
+            );
+            (0.0, 0.0, 0.0, 1.0)
+        }
+    };
+    from_rgba(env, rgba)
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGColorRetain(_)),
     export_c_func!(CGColorRelease(_)),
@@ -135,6 +158,13 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGColorCreateGenericRGB(_, _, _, _)),
     export_c_func!(CGColorEqualToColor(_, _)),
     export_c_func!(CGColorGetAlpha(_)),
+    export_c_func!(CGColorGetConstantColor(_)),
+];
+
+pub const CONSTANTS: ConstantExports = &[
+    ("_kCGColorWhite", HostConstant::NSString(kCGColorWhite)),
+    ("_kCGColorBlack", HostConstant::NSString(kCGColorBlack)),
+    ("_kCGColorClear", HostConstant::NSString(kCGColorClear)),
 ];
 
 /// Shortcut for use by `UIColor`: directly construct a `CGColor` instance from
