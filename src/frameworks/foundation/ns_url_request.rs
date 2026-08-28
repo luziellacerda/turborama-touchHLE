@@ -192,6 +192,10 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.borrow_mut::<NSURLRequestHostObject>(this).timeout_interval = timeout_interval;
 }
 
+- (())setCachePolicy:(NSURLRequestCachePolicy)cache_policy {
+    env.objc.borrow_mut::<NSURLRequestHostObject>(this).cache_policy = cache_policy;
+}
+
 - (())setValue:(id)value // NSString *
     forHTTPHeaderField:(id)field { // NSString *
     log_dbg!("[(NSURLRequest*){:?} setValue:'{}' forHTTPHeaderField:'{}']", this, to_rust_string(env, value), to_rust_string(env, field));
