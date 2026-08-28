@@ -16,7 +16,7 @@ use crate::frameworks::core_foundation::cf_number::{
 use crate::frameworks::core_graphics::{CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::ns_keyed_archiver::get_value_to_encode_for_current_key;
 use crate::frameworks::foundation::NSInteger;
-use crate::mem::{ConstVoidPtr, MutVoidPtr};
+use crate::mem::{ConstPtr, ConstVoidPtr, MutVoidPtr};
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, retain, Class, ClassExports,
     HostObject, NSZonePtr,
@@ -380,6 +380,23 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (bool)boolValue {
     env.objc.borrow::<NSNumberHostObject>(this).as_bool()
+}
+
+- (ConstPtr<u8>)objCType {
+    // @encode() codes for the wrapped C type.
+    let code: &[u8] = match env.objc.borrow::<NSNumberHostObject>(this) {
+        NSNumberHostObject::Bool(_) => b"c",
+        NSNumberHostObject::UnsignedLongLong(_) => b"Q",
+        NSNumberHostObject::UnsignedInt(_) => b"I",
+        NSNumberHostObject::Int(_) => b"i",
+        NSNumberHostObject::LongLong(_) => b"q",
+        NSNumberHostObject::Float(_) => b"f",
+        NSNumberHostObject::Double(_) => b"d",
+        NSNumberHostObject::Short(_) => b"s",
+        NSNumberHostObject::UnsignedShort(_) => b"S",
+        NSNumberHostObject::Char(_) => b"c",
+    };
+    env.mem.alloc_and_write_cstr(code).cast_const()
 }
 
 - (NSInteger)integerValue {
