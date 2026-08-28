@@ -219,6 +219,23 @@ fn SCNetworkReachabilityUnscheduleFromRunLoop(
     true
 }
 
+/// `int SCError(void)`
+///
+/// Returns the most recent SystemConfiguration error. touchHLE's reachability
+/// functions always succeed, so this is always `kSCStatusOK`.
+fn SCError(_env: &mut Environment) -> i32 {
+    0 // kSCStatusOK
+}
+
+/// `const char *SCErrorString(int status)`
+fn SCErrorString(env: &mut Environment, status: i32) -> ConstPtr<u8> {
+    let message: &[u8] = match status {
+        0 => b"Success!",
+        _ => b"Unknown error",
+    };
+    env.mem.alloc_and_write_cstr(message).cast_const()
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(SCNetworkReachabilityCreateWithName(_, _)),
     export_c_func!(SCNetworkReachabilityCreateWithAddress(_, _)),
@@ -226,4 +243,6 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(SCNetworkReachabilitySetCallback(_, _, _)),
     export_c_func!(SCNetworkReachabilityScheduleWithRunLoop(_, _, _)),
     export_c_func!(SCNetworkReachabilityUnscheduleFromRunLoop(_, _, _)),
+    export_c_func!(SCError()),
+    export_c_func!(SCErrorString(_)),
 ];

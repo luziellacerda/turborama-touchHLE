@@ -57,6 +57,22 @@ fn inet_ntop(
     dst.cast_const()
 }
 
+fn inet_aton(env: &mut Environment, str: ConstPtr<u8>, addr: MutPtr<in_addr>) -> i32 {
+    let inet_addr_str = env.mem.cstr_at_utf8(str).unwrap();
+    let Ok(address) = inet_addr_str.parse::<Ipv4Addr>() else {
+        // inet_aton returns 0 (not INADDR_NONE) for a malformed address.
+        log_dbg!("inet_aton({:?}) => 0 (invalid)", inet_addr_str);
+        return 0;
+    };
+    let res = in_addr {
+        s_addr: u32::from_le_bytes(address.octets()),
+    };
+    if !addr.is_null() {
+        env.mem.write(addr, res);
+    }
+    1
+}
+
 fn inet_pton(env: &mut Environment, af: i32, src: ConstPtr<u8>, dst: MutVoidPtr) -> i32 {
     assert_eq!(af, AF_INET);
     let str = env.mem.cstr_at_utf8(src.cast()).unwrap();
@@ -76,6 +92,7 @@ fn inet_pton(env: &mut Environment, af: i32, src: ConstPtr<u8>, dst: MutVoidPtr)
 
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(inet_addr(_)),
+    export_c_func!(inet_aton(_, _)),
     export_c_func!(inet_ntop(_, _, _, _)),
     export_c_func!(inet_pton(_, _, _)),
 ];
