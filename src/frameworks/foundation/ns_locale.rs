@@ -157,6 +157,13 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // TODO: constructors, more accessors
 
++ (id)canonicalLocaleIdentifierFromString:(id)string { // NSString *
+    // touchHLE doesn't perform real locale canonicalization; return the
+    // identifier unchanged (as an autoreleased copy).
+    let copy: id = msg![env; string copy];
+    autorelease(env, copy)
+}
+
 - (id)initWithLocaleIdentifier:(id)string { // NSString *
     let str = ns_string::to_rust_string(env, string);
     log_dbg!("[(NSLocale *){:?} initWithLocaleIdentifier:'{}']", this, str);
