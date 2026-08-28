@@ -319,6 +319,25 @@ forControlEvents:(UIControlEvents)events {
     env.objc.borrow_mut::<UIControlHostObject>(this).action_targets.push((target, action, events));
 }
 
+- (())removeTarget:(id)target
+            action:(SEL)action
+  forControlEvents:(UIControlEvents)events {
+    // iOS treats a nil target and a NULL action as wildcards. Only entries
+    // whose events overlap the given mask are removed; an entry registered for
+    // other events as well keeps those.
+    let host_object = env.objc.borrow_mut::<UIControlHostObject>(this);
+    host_object.action_targets.retain_mut(|(t, a, e)| {
+        let target_matches = target == nil || *t == target;
+        let action_matches = action.is_null() || *a == action;
+        if !(target_matches && action_matches) {
+            return true;
+        }
+        // Drop only the events being removed.
+        *e &= !events;
+        *e != 0
+    });
+}
+
 - (())sendAction:(SEL)action
               to:(id)target
         forEvent:(id)event { // UIEvent*
