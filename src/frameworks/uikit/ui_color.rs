@@ -175,7 +175,31 @@ pub const CLASSES: ClassExports = objc_classes! {
 
             msg![env; this initWithWhite:w alpha:a]
         }
-        _ => unimplemented!()
+        _ => {
+            // UIColorComponentCount was missing or unexpected (a missing key
+            // decodes as 0). Fall back to inspecting which component keys are
+            // actually present in the archive.
+            let red_key = get_static_str(env, "UIRed");
+            let white_key = get_static_str(env, "UIWhite");
+            if msg![env; coder containsValueForKey:red_key] {
+                let r: CGFloat = msg![env; coder decodeFloatForKey:red_key];
+                let green_key = get_static_str(env, "UIGreen");
+                let g: CGFloat = msg![env; coder decodeFloatForKey:green_key];
+                let blue_key = get_static_str(env, "UIBlue");
+                let b: CGFloat = msg![env; coder decodeFloatForKey:blue_key];
+                msg![env; this initWithRed:r green:g blue:b alpha:a]
+            } else if msg![env; coder containsValueForKey:white_key] {
+                let w: CGFloat = msg![env; coder decodeFloatForKey:white_key];
+                msg![env; this initWithWhite:w alpha:a]
+            } else {
+                // Nothing recognizable to decode; opaque black is a safe default.
+                log!(
+                    "Warning: UIColor initWithCoder: no recognized color keys (count {}); defaulting to black",
+                    count
+                );
+                msg![env; this initWithWhite:(0.0 as CGFloat) alpha:(1.0 as CGFloat)]
+            }
+        }
     }
 }
 
