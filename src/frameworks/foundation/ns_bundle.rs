@@ -118,6 +118,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)bundlePath {
     env.objc.borrow::<NSBundleHostObject>(this).bundle_path
 }
+- (bool)load {
+    // On iOS this dynamically loads the bundle's executable. In touchHLE the
+    // executable is always already loaded, so just report success.
+    true
+}
+- (bool)isLoaded {
+    true
+}
 - (id)initWithPath:(id)path { // NSString*
     // allocWithZone: initialized bundle_path to the main bundle's path; replace
     // it with the requested path so resource lookups resolve there.
