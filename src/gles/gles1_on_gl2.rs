@@ -1336,6 +1336,18 @@ impl GLES for GLES1OnGL2<'_> {
         // unavailable.
         log!("Warning: PointSizePointerOES ignored (unsupported on the GL 2.1 backend)");
     }
+    unsafe fn DrawTexiOES(
+        &mut self,
+        _x: GLint,
+        _y: GLint,
+        _z: GLint,
+        _width: GLint,
+        _height: GLint,
+    ) {
+        // Desktop GL 2.1 has no GL_OES_draw_texture. This backend is only used
+        // where native GLES 1.1 is unavailable, so just warn.
+        log!("Warning: DrawTexiOES ignored (unsupported on the GL 2.1 backend)");
+    }
 
     // Drawing
     unsafe fn DrawArrays(&mut self, mode: GLenum, first: GLint, count: GLsizei) {

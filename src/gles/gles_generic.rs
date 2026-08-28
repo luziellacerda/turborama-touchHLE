@@ -210,6 +210,7 @@ pub trait GLES {
         stride: GLsizei,
         pointer: *const GLvoid,
     );
+    unsafe fn DrawTexiOES(&mut self, x: GLint, y: GLint, z: GLint, width: GLint, height: GLint);
 
     // Drawing
     unsafe fn DrawArrays(&mut self, mode: GLenum, first: GLint, count: GLsizei);

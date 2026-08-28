@@ -400,6 +400,9 @@ impl GLES for GLES1Native<'_> {
     ) {
         gles11::PointSizePointerOES(type_, stride, pointer)
     }
+    unsafe fn DrawTexiOES(&mut self, x: GLint, y: GLint, z: GLint, width: GLint, height: GLint) {
+        gles11::DrawTexiOES(x, y, z, width, height)
+    }
 
     // Drawing
     unsafe fn DrawArrays(&mut self, mode: GLenum, first: GLint, count: GLsizei) {

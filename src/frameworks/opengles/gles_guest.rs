@@ -742,6 +742,11 @@ fn glPointSizePointerOES(
         gles.PointSizePointerOES(type_, stride, pointer)
     })
 }
+fn glDrawTexiOES(env: &mut Environment, x: GLint, y: GLint, z: GLint, width: GLint, height: GLint) {
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        gles.DrawTexiOES(x, y, z, width, height)
+    })
+}
 
 // Drawing
 fn glDrawArrays(env: &mut Environment, mode: GLenum, first: GLint, count: GLsizei) {
@@ -1637,6 +1642,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(glTexCoordPointer(_, _, _, _)),
     export_c_func!(glVertexPointer(_, _, _, _)),
     export_c_func!(glPointSizePointerOES(_, _, _)),
+    export_c_func!(glDrawTexiOES(_, _, _, _, _)),
     // Drawing
     export_c_func!(glDrawArrays(_, _, _)),
     export_c_func!(glDrawElements(_, _, _, _)),
