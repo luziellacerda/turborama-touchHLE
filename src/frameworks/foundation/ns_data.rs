@@ -5,7 +5,7 @@
  */
 //! `NSData` and `NSMutableData`.
 
-use super::ns_string::to_rust_string;
+use super::ns_string::{from_rust_string, to_rust_string};
 use super::{NSRange, NSUInteger};
 use crate::frameworks::foundation::ns_keyed_unarchiver::decode_current_data;
 use crate::fs::GuestPath;
@@ -231,6 +231,23 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (NSUInteger)length {
     env.objc.borrow::<NSDataHostObject>(this).length
+}
+
+- (id)description {
+    // Cocoa's -[NSData description] returns the bytes as hex inside angle
+    // brackets, with a space between every group of 4 bytes, e.g.
+    // <00112233 44556677 8899>.
+    let bytes = to_rust_slice(env, this).to_vec();
+    let mut description = String::with_capacity(2 + bytes.len() * 2 + bytes.len() / 4);
+    description.push('<');
+    for (i, byte) in bytes.iter().enumerate() {
+        if i != 0 && i % 4 == 0 {
+            description.push(' ');
+        }
+        description.push_str(&format!("{:02x}", byte));
+    }
+    description.push('>');
+    from_rust_string(env, description)
 }
 
 - (bool)isEqualToData:(id)other {
