@@ -308,6 +308,7 @@ fn serialize_plist(env: &mut Environment, plist: id) -> Value {
             NSNumberHostObject::Float(f) => Value::from(*f),
             NSNumberHostObject::Double(d) => Value::from(*d),
             NSNumberHostObject::LongLong(ll) => Value::from(*ll),
+            NSNumberHostObject::UnsignedLongLong(ull) => Value::from(*ull),
             NSNumberHostObject::Short(s) => Value::from(*s),
             NSNumberHostObject::Char(c) => Value::from(*c),
             _ => todo!("num {:?}", num),
