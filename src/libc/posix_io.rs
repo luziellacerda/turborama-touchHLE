@@ -44,6 +44,9 @@ struct PosixFileHostObject {
     file: GuestFile,
     needs_flush: bool,
     reached_eof: bool,
+    /// Sticky error indicator, as reported by C `ferror()` and cleared by
+    /// `clearerr()`.
+    had_error: bool,
     flags: i32,
 }
 
@@ -210,6 +213,7 @@ pub fn open_direct(env: &mut Environment, path: ConstPtr<u8>, flags: i32) -> Fil
                 file,
                 needs_flush,
                 reached_eof: false,
+                had_error: false,
                 flags: 0,
             };
 
@@ -317,6 +321,9 @@ pub fn read(
                 e,
                 res,
             );
+            // Set the sticky error indicator for ferror(). Done via a fresh
+            // borrow because the one above ends before set_errno().
+            env.libc_state.posix_io.file_for_fd(fd).unwrap().had_error = true;
             res
         }
     }
@@ -362,6 +369,16 @@ pub(super) fn eof(env: &mut Environment, fd: FileDescriptor) -> i32 {
     }
 }
 
+/// Helper for C `ferror()`.
+pub(super) fn error(env: &mut Environment, fd: FileDescriptor) -> i32 {
+    let file = env.libc_state.posix_io.file_for_fd(fd).unwrap();
+    if file.had_error {
+        1
+    } else {
+        0
+    }
+}
+
 /// Helper for C `clearerr()`.
 pub(super) fn clearerr(env: &mut Environment, fd: FileDescriptor) {
     // TODO: handle errno properly
@@ -369,6 +386,7 @@ pub(super) fn clearerr(env: &mut Environment, fd: FileDescriptor) {
 
     let file = env.libc_state.posix_io.file_for_fd(fd).unwrap();
     file.reached_eof = false;
+    file.had_error = false;
 }
 
 /// Helper for C `fflush()`.
@@ -494,6 +512,7 @@ pub fn write(
         }
         Err(e) => {
             // TODO: set errno
+            file.had_error = true;
             log!(
                 "Warning: write({:?}, {:?}, {:#x}) encountered error {:?}, returning -1",
                 fd,
@@ -1039,6 +1058,7 @@ pub fn find_or_create_socket(env: &mut Environment) -> FileDescriptor {
         file: GuestFile::Socket,
         needs_flush: false,
         reached_eof: false,
+        had_error: false,
         flags: 0,
     };
     find_or_create_fd(env, host_object)

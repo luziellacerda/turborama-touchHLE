@@ -551,9 +551,8 @@ fn ferror(env: &mut Environment, file_ptr: MutPtr<FILE>) -> i32 {
     set_errno(env, 0);
 
     _touchHLE_check_file_object_lock(env, file_ptr);
-
-    log!("TODO: ferror() support.");
-    0
+    let FILE { fd } = env.mem.read(file_ptr);
+    posix_io::error(env, fd)
 }
 
 fn fsetpos(env: &mut Environment, file_ptr: MutPtr<FILE>, pos: ConstPtr<fpos_t>) -> i32 {
