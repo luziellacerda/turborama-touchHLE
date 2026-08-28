@@ -117,7 +117,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // NSCopying implementation
 - (id)copyWithZone:(NSZonePtr)_zone {
-    todo!(); // TODO: this should produce an immutable copy
+    // A mutable set must produce a genuinely independent immutable copy (it
+    // can't retain itself like an immutable set does, because the original may
+    // still be mutated). Mirror NSMutableArray: build a new NSSet from this
+    // set's objects.
+    let objects: id = msg![env; this allObjects];
+    let other: id = msg_class![env; NSSet alloc];
+    let other: id = msg![env; other initWithArray:objects];
+    other
 }
 
 @end
