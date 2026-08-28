@@ -164,6 +164,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     () = msg![env; text_label setMinimumFontSize:size];
 }
 
+- (())setAdjustsFontSizeToFitWidth:(bool)adjusts {
+    let text_label = env.objc.borrow_mut::<UITextFieldHostObject>(this).text_label;
+    () = msg![env; text_label setAdjustsFontSizeToFitWidth:adjusts];
+}
+
 - (())setClearsOnBeginEditing:(bool)clear {
     todo_objc_setter!(this, clear);
 }

@@ -160,7 +160,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     false // default value
 }
 - (())setAdjustsFontSizeToFitWidth:(bool)adjusts {
-    assert!(!adjusts); // TODO
+    // touchHLE doesn't implement shrink-to-fit, so text that is too long will
+    // overflow rather than being scaled down. Accepted and ignored.
+    if adjusts {
+        log_dbg!("TODO: [(UILabel*){:?} setAdjustsFontSizeToFitWidth:true] (ignored)", this);
+    }
 }
 
 - (())setMinimumFontSize:(CGFloat)size {
