@@ -275,9 +275,25 @@ pub const CLASSES: ClassExports = objc_classes! {
 // A caching layer a top of NSURL, it's OK to stub
 // as we don't have yet a networking support
 @implementation NSURLCache: NSObject
++ (id)allocWithZone:(NSZonePtr)_zone {
+    // No state: this is a non-functional cache stub.
+    let host_object = Box::new(crate::objc::TrivialHostObject);
+    env.objc.alloc_object(this, host_object, &mut env.mem)
+}
 + (id)sharedURLCache {
     // TODO
     nil
+}
+- (id)initWithMemoryCapacity:(NSUInteger)_memory_capacity
+                diskCapacity:(NSUInteger)_disk_capacity
+                    diskPath:(id)_path { // NSString*
+    // touchHLE doesn't cache URL responses; accept the request and return a
+    // functionless cache object.
+    this
+}
+- (())setMemoryCapacity:(NSUInteger)_memory_capacity {
+}
+- (())setDiskCapacity:(NSUInteger)_disk_capacity {
 }
 @end
 
