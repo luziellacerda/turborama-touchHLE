@@ -15,6 +15,7 @@ use std::collections::HashMap;
 
 type vm_map_t = mach_port_t;
 type vm_purgable_t = i32;
+type vm_prot_t = i32;
 type mach_vm_address_t = u32;
 type mach_vm_size_t = u32;
 
@@ -82,8 +83,33 @@ fn vm_purgable_control(
     KERN_SUCCESS
 }
 
+fn vm_protect(
+    _env: &mut Environment,
+    target_task: vm_map_t,
+    address: mach_vm_address_t,
+    size: mach_vm_size_t,
+    set_maximum: bool,
+    new_protection: vm_prot_t,
+) -> kern_return_t {
+    assert_eq!(target_task, MACH_TASK_SELF);
+    // touchHLE has no memory protection: guest memory is a flat array that is
+    // always readable, writable and executable. Whatever the app is asking for,
+    // it already has, so reporting success is accurate rather than merely
+    // convenient.
+    log_dbg!(
+        "vm_protect({:#x}, {:#x}, {:#x}, {}, {:#x}) => KERN_SUCCESS (no memory protection)",
+        target_task,
+        address,
+        size,
+        set_maximum,
+        new_protection
+    );
+    KERN_SUCCESS
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(vm_allocate(_, _, _, _)),
     export_c_func!(vm_deallocate(_, _, _)),
     export_c_func!(vm_purgable_control(_, _, _, _)),
+    export_c_func!(vm_protect(_, _, _, _, _)),
 ];
