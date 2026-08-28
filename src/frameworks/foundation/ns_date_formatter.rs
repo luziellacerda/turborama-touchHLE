@@ -10,7 +10,7 @@
 //! - [Unicode Technical Standard #35](https://unicode.org/reports/tr35/tr35-10.html#Date_Format_Patterns)
 
 use crate::frameworks::core_foundation::time::CFAbsoluteTimeGetGregorianDate;
-use crate::frameworks::foundation::{ns_string, NSTimeInterval};
+use crate::frameworks::foundation::{ns_string, NSInteger, NSTimeInterval};
 use crate::objc::{autorelease, id, msg, nil, objc_classes, ClassExports, HostObject, NSZonePtr};
 
 struct NSDateFormatterHostObject {
@@ -34,6 +34,23 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())setDateFormat:(id)format { // NSString *
     let date_format: id = msg![env; format copy];
     env.objc.borrow_mut::<NSDateFormatterHostObject>(this).date_format = Some(date_format);
+}
+
+// Style-based configuration. touchHLE's formatter only applies an explicit
+// date format string (setDateFormat:), so these are accepted but not applied.
+- (())setTimeStyle:(NSInteger)_style {
+}
+- (())setDateStyle:(NSInteger)_style {
+}
+- (())setFormatterBehavior:(NSInteger)_behavior {
+}
+- (())setLocale:(id)_locale {
+}
+- (())setTimeZone:(id)_time_zone {
+}
+- (())setCalendar:(id)_calendar {
+}
+- (())setGeneratesCalendarDates:(bool)_generates {
 }
 
 - (id)stringFromDate:(id)date {
