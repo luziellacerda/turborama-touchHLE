@@ -348,6 +348,23 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
+// NSCountedSet counts how many times each object was added. touchHLE doesn't
+// track per-object counts, so it behaves as a plain mutable set and reports a
+// count of 1 for objects it contains — enough for apps that use it to collect
+// distinct objects and query membership.
+@implementation NSCountedSet: NSMutableSet
+
++ (id)allocWithZone:(NSZonePtr)zone {
+    msg_class![env; _touchHLE_NSMutableSet allocWithZone:zone]
+}
+
+- (NSUInteger)countForObject:(id)object {
+    let contains: bool = msg![env; this containsObject:object];
+    if contains { 1 } else { 0 }
+}
+
+@end
+
 };
 
 /// Helper method shared between `initWithObjects:` of `_touchHLE_NSSet` and
