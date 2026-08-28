@@ -39,6 +39,10 @@ struct UIViewControllerHostObject {
     /// of the nib by name, may be nil.
     /// `NSBundle*`
     bundle: id,
+    /// The controller this one is a child of, if any. Not retained (a parent
+    /// owns its children, not the other way round).
+    /// `UIViewController*`
+    parent_view_controller: id,
 }
 impl HostObject for UIViewControllerHostObject {}
 
@@ -79,7 +83,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())dealloc {
-    let &UIViewControllerHostObject { view, nib_name, bundle } = env.objc.borrow(this);
+    let &UIViewControllerHostObject { view, nib_name, bundle, parent_view_controller: _ } = env.objc.borrow(this);
 
     if view != nil {
         set_view_controller(env, view, nil);
@@ -202,6 +206,13 @@ pub const CLASSES: ClassExports = objc_classes! {
 // controller is currently presented modally".
 - (id)modalViewController {
     nil
+}
+- (id)parentViewController {
+    env.objc.borrow::<UIViewControllerHostObject>(this).parent_view_controller
+}
+- (())setParentViewController:(id)parent { // UIViewController*
+    // Not retained: a parent owns its children, not the other way round.
+    env.objc.borrow_mut::<UIViewControllerHostObject>(this).parent_view_controller = parent;
 }
 - (())dismissMoviePlayerViewControllerAnimated {
     log!("TODO: [(UIViewController*){:?} dismissMoviePlayerViewControllerAnimated]", this); // TODO
