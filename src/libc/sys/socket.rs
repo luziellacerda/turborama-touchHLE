@@ -22,7 +22,9 @@
 //! - [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/html/index-wide.html)
 
 use crate::dyld::{export_c_func, FunctionExports};
-use crate::libc::errno::{set_errno, EBADF, ECONNRESET, EINVAL, ENOTCONN, EPROTONOSUPPORT};
+use crate::libc::errno::{
+    set_errno, EBADF, ECONNREFUSED, ECONNRESET, EINVAL, ENOTCONN, EPIPE, EPROTONOSUPPORT, ETIMEDOUT,
+};
 use crate::libc::posix_io::{close, find_or_create_socket, is_socket, FileDescriptor};
 use crate::libc::time::timeval;
 use crate::mem::{
@@ -486,7 +488,23 @@ fn connect(
         .unwrap()
         .tcp_stream
         .is_none());
-    let host_stream = TcpStream::connect(socket_address).unwrap();
+    let host_stream = match TcpStream::connect(socket_address) {
+        Ok(stream) => stream,
+        Err(e) => {
+            // A refused or otherwise failed connection is an ordinary result
+            // that the app is expected to handle, not a reason to abort.
+            log_dbg!("connect: {:?} failed: {}", socket_address, e);
+            set_errno(
+                env,
+                match e.kind() {
+                    io::ErrorKind::ConnectionRefused => ECONNREFUSED,
+                    io::ErrorKind::TimedOut => ETIMEDOUT,
+                    _ => ECONNREFUSED,
+                },
+            );
+            return -1;
+        }
+    };
     // We set host socket as non-blocking in order to have
     // more control of how and when it's used
     host_stream.set_nonblocking(true).unwrap();
@@ -1063,7 +1081,20 @@ fn send(
                     // - unblock guest thread
                     unimplemented!("send: TCP socket {} would block on sending, block current guest thread {}.", socket, env.current_thread)
                 }
-                Err(e) => panic!("send: Socket {socket} encountered IO error: {e}"),
+                Err(e) => {
+                    // The peer going away is normal for an app talking to a
+                    // server that is gone; report it instead of aborting.
+                    log_dbg!("send: socket {} IO error: {}", socket, e);
+                    set_errno(
+                        env,
+                        match e.kind() {
+                            io::ErrorKind::BrokenPipe => EPIPE,
+                            io::ErrorKind::ConnectionReset => ECONNRESET,
+                            _ => EPIPE,
+                        },
+                    );
+                    return -1;
+                }
             }
         }
         _ => unreachable!(),
