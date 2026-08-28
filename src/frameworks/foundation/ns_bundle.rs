@@ -75,6 +75,15 @@ pub const CLASSES: ClassExports = objc_classes! {
    }
 }
 
++ (id)bundleWithPath:(id)path { // NSString*
+    // The NSBundleHostObject-creating allocWithZone: lives on the static
+    // subclass (see mainBundle); allocating NSBundle directly would yield a
+    // TrivialHostObject and crash in initWithPath:.
+    let new: id = msg_class![env; _touchHLE_NSBundle_Static alloc];
+    let new: id = msg![env; new initWithPath:path];
+    autorelease(env, new)
+}
+
 + (id)preferredLocalizationsFromArray:(id)localizations_array { // NSArray<NSString *> *
     let preferredLocalizations = CFBundleCopyPreferredLocalizationsFromArray(env, localizations_array);
     autorelease(env, preferredLocalizations)
@@ -108,6 +117,17 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (id)bundlePath {
     env.objc.borrow::<NSBundleHostObject>(this).bundle_path
+}
+- (id)initWithPath:(id)path { // NSString*
+    // allocWithZone: initialized bundle_path to the main bundle's path; replace
+    // it with the requested path so resource lookups resolve there.
+    let path_copy: id = msg![env; path copy];
+    let old = env.objc.borrow::<NSBundleHostObject>(this).bundle_path;
+    if old != nil {
+        () = msg![env; old release];
+    }
+    env.objc.borrow_mut::<NSBundleHostObject>(this).bundle_path = path_copy;
+    this
 }
 - (id)bundleIdentifier {
     env.objc.borrow::<NSBundleHostObject>(this).bundle_identifier
