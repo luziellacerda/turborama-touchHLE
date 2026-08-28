@@ -59,6 +59,9 @@ struct NSRunLoopHostObject {
     /// Strong references to `NSTimer*` in no particular order. Timers are owned
     /// by the run loop. The timer must remove itself when invalidated.
     timers: Vec<id>,
+    /// Set by `CFRunLoopStop()`; makes the current run finish after the
+    /// iteration in progress and is cleared again once it has taken effect.
+    stop_requested: bool,
 }
 impl HostObject for NSRunLoopHostObject {}
 
@@ -335,6 +338,13 @@ pub(super) fn cancel_perform_requests(
 
 /// Run the run loop for just a single iteration. This is a convenience for the
 /// app picker; guest code uses `runMode:beforeDate:` instead.
+/// Ask a run loop to finish its current run, for `CFRunLoopStop()`.
+pub fn request_stop(env: &mut Environment, run_loop: id) {
+    env.objc
+        .borrow_mut::<NSRunLoopHostObject>(run_loop)
+        .stop_requested = true;
+}
+
 pub fn run_run_loop_single_iteration(env: &mut Environment, run_loop: id) {
     run_run_loop(env, run_loop, /* single_iteration: */ true, None)
 }
@@ -501,6 +511,16 @@ pub fn run_run_loop(
             break;
         }
 
+        // CFRunLoopStop() asks the current run to finish. Clear the request as
+        // it is consumed, so a later run isn't stopped by a stale one.
+        if env.objc.borrow::<NSRunLoopHostObject>(run_loop).stop_requested {
+            env.objc
+                .borrow_mut::<NSRunLoopHostObject>(run_loop)
+                .stop_requested = false;
+            log_dbg!("Run loop {:?} stopped by request", run_loop);
+            break;
+        }
+
         if let Some(limit) = unix_time_limit {
             // We use Unix epoch as a convenience reference date.
             // (Apple's epoch is less convenient in Rust. And "pure"
@@ -532,6 +552,7 @@ fn run_loop_for_thread(env: &mut Environment, this: Class, thread_id: ThreadId) 
             audio_queues: Vec::new(),
             selector_objects: VecDeque::new(),
             timers: Vec::new(),
+            stop_requested: false,
         });
         // TODO: is it OK to allocate static object for all threads,
         // not only main one?

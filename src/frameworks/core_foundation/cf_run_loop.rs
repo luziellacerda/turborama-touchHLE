@@ -10,7 +10,7 @@
 
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::core_foundation::time::CFTimeInterval;
-use crate::frameworks::foundation::ns_run_loop::run_run_loop_single_iteration;
+use crate::frameworks::foundation::ns_run_loop::{request_stop, run_run_loop_single_iteration};
 use crate::frameworks::foundation::ns_string;
 use crate::objc::{id, msg, msg_class};
 use crate::Environment;
@@ -49,6 +49,14 @@ fn CFRunLoopRunInMode(
     1 // kCFRunLoopRunFinished
 }
 
+fn CFRunLoopStop(env: &mut Environment, run_loop: CFRunLoopRef) {
+    // Asks the run loop to finish its current run. touchHLE checks the request
+    // between iterations, so a loop stopped from within a callback exits after
+    // that iteration completes, which is also how Apple describes it.
+    log_dbg!("CFRunLoopStop({:?})", run_loop);
+    request_stop(env, run_loop);
+}
+
 pub const kCFRunLoopCommonModes: &str = "kCFRunLoopCommonModes";
 pub const kCFRunLoopDefaultMode: &str = "kCFRunLoopDefaultMode";
 
@@ -67,4 +75,5 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFRunLoopGetCurrent()),
     export_c_func!(CFRunLoopGetMain()),
     export_c_func!(CFRunLoopRunInMode(_, _, _)),
+    export_c_func!(CFRunLoopStop(_)),
 ];
