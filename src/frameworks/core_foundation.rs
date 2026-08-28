@@ -73,6 +73,7 @@ pub use cf_type::{CFRelease, CFRetain, CFTypeRef};
 
 pub type CFHashCode = u32;
 pub type CFIndex = i32;
+pub type CFTypeID = u32;
 pub type CFOptionFlags = u32;
 pub type CFComparisonResult = CFIndex;
 
