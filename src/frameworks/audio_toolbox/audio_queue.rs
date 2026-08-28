@@ -25,7 +25,9 @@ use crate::frameworks::core_foundation::cf_run_loop::{
 };
 use crate::frameworks::foundation::ns_run_loop;
 use crate::frameworks::foundation::ns_string::get_static_str;
-use crate::mem::{guest_size_of, ConstPtr, GuestUSize, Mem, MutPtr, MutVoidPtr, Ptr, SafeRead};
+use crate::mem::{
+    guest_size_of, ConstPtr, ConstVoidPtr, GuestUSize, Mem, MutPtr, MutVoidPtr, Ptr, SafeRead,
+};
 use crate::objc::msg;
 use crate::Environment;
 use std::collections::{HashMap, VecDeque};
@@ -117,6 +119,7 @@ type AudioQueueParameterValue = f32;
 
 pub type AudioQueuePropertyID = u32;
 pub const kAudioQueueProperty_IsRunning: AudioQueuePropertyID = fourcc(b"aqrn");
+const kAudioQueueProperty_EnableLevelMetering: AudioQueuePropertyID = fourcc(b"aqme");
 
 /// (*void)(void *in_user_data, AudioQueueRef in_aq, AudioQueuePropertyID in_id)
 type AudioQueuePropertyListenerProc = GuestFunction;
@@ -444,6 +447,44 @@ fn AudioQueueGetPropertySize(
     return_if_null!(in_aq);
 
     env.mem.write(out_data_size, property_size(in_property_id));
+    0 // success
+}
+
+fn AudioQueueSetProperty(
+    env: &mut Environment,
+    in_aq: AudioQueueRef,
+    in_property_id: AudioQueuePropertyID,
+    in_property_data: ConstVoidPtr,
+    in_data_size: u32,
+) -> OSStatus {
+    return_if_null!(in_aq);
+
+    match in_property_id {
+        kAudioQueueProperty_EnableLevelMetering => {
+            // Level metering only drives things like a VU meter; whether it is
+            // on makes no difference to playback, so accepting the request and
+            // doing nothing is harmless. The app will read back all-zero levels
+            // if it asks for them.
+            let enabled: u32 = if in_data_size >= guest_size_of::<u32>() && !in_property_data.is_null()
+            {
+                env.mem.read(in_property_data.cast())
+            } else {
+                0
+            };
+            log!(
+                "TODO: AudioQueueSetProperty() level metering set to {}, ignoring",
+                enabled
+            );
+        }
+        _ => {
+            log!(
+                "TODO: AudioQueueSetProperty() property {} ({} bytes), ignoring",
+                debug_fourcc(in_property_id),
+                in_data_size
+            );
+        }
+    }
+
     0 // success
 }
 
@@ -1144,6 +1185,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioQueueRemovePropertyListener(_, _, _, _)),
     export_c_func!(AudioQueueGetPropertySize(_, _, _)),
     export_c_func!(AudioQueueGetProperty(_, _, _, _)),
+    export_c_func!(AudioQueueSetProperty(_, _, _, _)),
     export_c_func!(AudioQueuePrime(_, _, _)),
     export_c_func!(AudioQueueStart(_, _)),
     export_c_func!(AudioQueuePause(_)),
