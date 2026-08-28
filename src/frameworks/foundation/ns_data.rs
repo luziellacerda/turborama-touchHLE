@@ -142,6 +142,21 @@ pub const CLASSES: ClassExports = objc_classes! {
     }
 }
 
+- (id)initWithContentsOfURL:(id)url // NSURL *
+                    options:(NSUInteger)_options // NSDataReadingOptions
+                      error:(MutPtr<id>)error { // NSError **
+    // `options` are only performance/mapping hints (mapped, uncached, etc.)
+    // and don't affect the resulting bytes, so they can be ignored.
+    let res: id = msg![env; this initWithContentsOfURL:url];
+    // We don't currently synthesize an NSError on failure (the underlying
+    // 1-arg version just returns nil); at least null out the out-param on
+    // success so callers that inspect it don't read uninitialized memory.
+    if res != nil && !error.is_null() {
+        env.mem.write(error, nil);
+    }
+    res
+}
+
 - (id)initWithContentsOfFile:(id)path {
     if path == nil {
         return nil;
