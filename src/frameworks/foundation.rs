@@ -22,6 +22,7 @@ pub mod ns_bundle;
 pub mod ns_character_set;
 pub mod ns_coder;
 pub mod ns_data;
+pub mod ns_stream;
 pub mod ns_date;
 pub mod ns_date_formatter;
 pub mod ns_dictionary;
@@ -72,6 +73,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         ns_character_set::CLASSES,
         ns_coder::CLASSES,
         ns_data::CLASSES,
+        ns_stream::CLASSES,
         ns_date::CLASSES,
         ns_date_formatter::CLASSES,
         ns_dictionary::CLASSES,
