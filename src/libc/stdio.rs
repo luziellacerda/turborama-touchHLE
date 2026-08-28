@@ -55,10 +55,23 @@ impl State {
         file_ptr: MutPtr<FILE>,
     ) -> &mut FILEHostObject {
         let FILE { fd } = mem.read(file_ptr);
-        if matches!(fd, STDIN_FILENO | STDOUT_FILENO | STDERR_FILENO)
-            && !self.file_streams.contains_key(&file_ptr)
-        {
-            // Special case, need to do a lazy creation of host object
+        if !self.file_streams.contains_key(&file_ptr) {
+            // Standard streams are set up lazily, since the guest gets them as
+            // constants rather than from fopen().
+            //
+            // Any other unknown stream means the app is using a FILE* we never
+            // handed out: typically one it has already fclose()d, reached via
+            // an error path. Apple's stdio would misbehave rather than abort,
+            // and taking down the whole emulator over it is far worse than
+            // carrying on, so create the bookkeeping on demand either way. The
+            // fd stored in the guest's FILE struct still governs the actual
+            // I/O, and if it is invalid the underlying calls fail normally.
+            if !matches!(fd, STDIN_FILENO | STDOUT_FILENO | STDERR_FILENO) {
+                log_once!(
+                    "Warning: [stdio] app used a FILE* with no known stream; tolerating it. \
+                     This usually means a closed stream was reused."
+                );
+            }
             self.file_streams.insert(
                 file_ptr,
                 FILEHostObject {
