@@ -1043,6 +1043,28 @@ fn glTexParameterf(env: &mut Environment, target: GLenum, pname: GLenum, param: 
         gles.TexParameterf(target, pname, param)
     })
 }
+fn glGetTexParameteriv(
+    env: &mut Environment,
+    target: GLenum,
+    pname: GLenum,
+    params: MutPtr<GLint>,
+) {
+    with_ctx_and_mem(env, |gles, mem| {
+        let params = mem.ptr_at_mut(params, 4 /* upper bound */);
+        unsafe { gles.GetTexParameteriv(target, pname, params) }
+    })
+}
+fn glGetTexParameterfv(
+    env: &mut Environment,
+    target: GLenum,
+    pname: GLenum,
+    params: MutPtr<GLfloat>,
+) {
+    with_ctx_and_mem(env, |gles, mem| {
+        let params = mem.ptr_at_mut(params, 4 /* upper bound */);
+        unsafe { gles.GetTexParameterfv(target, pname, params) }
+    })
+}
 fn glTexParameterx(env: &mut Environment, target: GLenum, pname: GLenum, param: GLfixed) {
     // See above.
     if pname == gles11::TEXTURE_CROP_RECT_OES {
@@ -1721,6 +1743,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(glIsTexture(_)),
     export_c_func!(glBindTexture(_, _)),
     export_c_func!(glTexParameteri(_, _, _)),
+    export_c_func!(glGetTexParameteriv(_, _, _)),
+    export_c_func!(glGetTexParameterfv(_, _, _)),
     export_c_func!(glTexParameterf(_, _, _)),
     export_c_func!(glTexParameterx(_, _, _)),
     export_c_func!(glTexParameteriv(_, _, _)),

@@ -1578,6 +1578,16 @@ impl GLES for GLES1OnGL2<'_> {
         TEX_PARAMS.assert_known_param(pname);
         gl21::TexParameterf(target, pname, param);
     }
+    unsafe fn GetTexParameteriv(&mut self, target: GLenum, pname: GLenum, params: *mut GLint) {
+        assert!(target == gl21::TEXTURE_2D);
+        TEX_PARAMS.assert_known_param(pname);
+        gl21::GetTexParameteriv(target, pname, params);
+    }
+    unsafe fn GetTexParameterfv(&mut self, target: GLenum, pname: GLenum, params: *mut GLfloat) {
+        assert!(target == gl21::TEXTURE_2D);
+        TEX_PARAMS.assert_known_param(pname);
+        gl21::GetTexParameterfv(target, pname, params);
+    }
     unsafe fn TexParameterx(&mut self, target: GLenum, pname: GLenum, param: GLfixed) {
         assert!(target == gl21::TEXTURE_2D);
         TEX_PARAMS.setx(

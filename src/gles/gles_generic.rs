@@ -278,6 +278,8 @@ pub trait GLES {
     unsafe fn BindTexture(&mut self, target: GLenum, texture: GLuint);
     unsafe fn TexParameteri(&mut self, target: GLenum, pname: GLenum, param: GLint);
     unsafe fn TexParameterf(&mut self, target: GLenum, pname: GLenum, param: GLfloat);
+    unsafe fn GetTexParameteriv(&mut self, target: GLenum, pname: GLenum, params: *mut GLint);
+    unsafe fn GetTexParameterfv(&mut self, target: GLenum, pname: GLenum, params: *mut GLfloat);
     unsafe fn TexParameterx(&mut self, target: GLenum, pname: GLenum, param: GLfixed);
     unsafe fn TexParameteriv(&mut self, target: GLenum, pname: GLenum, params: *const GLint);
     unsafe fn TexParameterfv(&mut self, target: GLenum, pname: GLenum, params: *const GLfloat);
