@@ -72,6 +72,19 @@ pub const CLASSES: ClassExports = objc_classes! {
     autorelease(env, new)
 }
 
++ (id)dataWithContentsOfFile:(id)path
+                     options:(NSUInteger)_options // NSDataReadingOptions
+                       error:(MutPtr<id>)out_error { // NSError **
+    // The reading options (mapping, uncached, …) don't change what touchHLE
+    // does: the file is always read into memory.
+    let new: id = msg![env; this alloc];
+    let new: id = msg![env; new initWithContentsOfFile:path];
+    if !out_error.is_null() {
+        env.mem.write(out_error, nil);
+    }
+    autorelease(env, new)
+}
+
 + (id)dataWithContentsOfMappedFile:(id)path {
     let new: id = msg![env; this alloc];
     let new: id = msg![env; new initWithContentsOfMappedFile:path];
