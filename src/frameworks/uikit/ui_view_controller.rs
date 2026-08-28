@@ -194,6 +194,13 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())dismissModalViewControllerAnimated:(bool)animated {
     log!("TODO: [(UIViewController*){:?} dismissModalViewControllerAnimated:{}]", this, animated); // TODO
 }
+// touchHLE doesn't track modal presentation (there's no presentModalView
+// Controller path that stores a presented controller), so there is never a
+// modally-presented controller to return. nil is the correct answer for "no
+// controller is currently presented modally".
+- (id)modalViewController {
+    nil
+}
 - (())dismissMoviePlayerViewControllerAnimated {
     log!("TODO: [(UIViewController*){:?} dismissMoviePlayerViewControllerAnimated]", this); // TODO
 }
