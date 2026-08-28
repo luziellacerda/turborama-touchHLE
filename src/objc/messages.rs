@@ -192,7 +192,34 @@ fn objc_msgSend_inner(
     }
 
     let orig_class = super2.unwrap_or_else(|| ObjC::read_isa(receiver, &env.mem));
-    assert!(orig_class != nil);
+    if orig_class == nil {
+        // The receiver is non-nil but its class (isa) is nil: it was never
+        // properly initialized, or it's a stale/garbage pointer the app is
+        // still touching. On a real device, memory-management messages
+        // (release/retain/autorelease) to such a pointer usually do nothing
+        // catastrophic, so the app "gets away with it". Tolerate exactly
+        // those three selectors here (behaving as if the receiver were nil),
+        // but keep panicking for any other selector, since a real method call
+        // to a class-less object still indicates a genuine bug we'd want to
+        // catch rather than silently mishandle.
+        let sel_name = selector.as_str(&env.mem);
+        if matches!(sel_name, "release" | "retain" | "autorelease") {
+            log!(
+                "Warning: ignoring [{:?} {}] sent to an object whose class (isa) is nil \
+                 (uninitialized or stale pointer); behaving as if it were nil.",
+                receiver,
+                sel_name,
+            );
+            env.cpu.regs_mut()[0..2].fill(0);
+            return;
+        }
+        panic!(
+            "objc_msgSend to object {:?} whose class (isa) is nil! selector: \"{}\". \
+             This object was probably never properly initialized (its isa was never set).",
+            receiver,
+            sel_name,
+        );
+    }
     if !skip_initialize {
         maybe_initialize_class(env, receiver);
     }
