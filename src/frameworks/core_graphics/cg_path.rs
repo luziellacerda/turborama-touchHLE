@@ -18,7 +18,9 @@ use super::cg_bitmap_context::CGBitmapContextDrawer;
 use super::cg_context::{CGContextClipToRect, CGContextHostObject, CGContextRef};
 use super::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::dyld::{export_c_func, FunctionExports};
+use crate::frameworks::core_foundation::{CFRelease, CFRetain, CFTypeRef};
 use crate::image::gamma_decode;
+use crate::objc::{objc_classes, ClassExports, HostObject};
 use crate::Environment;
 
 fn CGContextBeginPath(env: &mut Environment, context: CGContextRef) {
@@ -249,6 +251,130 @@ fn point_in_convex_quad(p: CGPoint, corners: &[CGPoint; 4]) -> bool {
     true
 }
 
+pub const CLASSES: ClassExports = objc_classes! {
+
+(env, this, _cmd);
+
+// CGPath is a CFType-based type; like CGColor we back it with an Obj-C class
+// whose name isn't visible anywhere.
+@implementation _touchHLE_CGPath: NSObject
+@end
+
+};
+
+/// Subpaths in the same representation the context uses: a list of
+/// (points, closed) tuples.
+pub struct CGPathHostObject {
+    pub subpaths: Vec<(Vec<CGPoint>, bool)>,
+}
+impl HostObject for CGPathHostObject {}
+
+pub type CGPathRef = CFTypeRef;
+pub type CGMutablePathRef = CFTypeRef;
+
+fn new_path(env: &mut Environment, subpaths: Vec<(Vec<CGPoint>, bool)>) -> CGMutablePathRef {
+    let host_obj = Box::new(CGPathHostObject { subpaths });
+    let class = env.objc.get_known_class("_touchHLE_CGPath", &mut env.mem);
+    env.objc.alloc_object(class, host_obj, &mut env.mem)
+}
+
+fn CGPathCreateMutable(env: &mut Environment) -> CGMutablePathRef {
+    new_path(env, Vec::new())
+}
+
+fn CGPathCreateMutableCopy(env: &mut Environment, path: CGPathRef) -> CGMutablePathRef {
+    let subpaths = if path.is_null() {
+        Vec::new()
+    } else {
+        env.objc.borrow::<CGPathHostObject>(path).subpaths.clone()
+    };
+    new_path(env, subpaths)
+}
+
+fn CGPathRelease(env: &mut Environment, path: CGPathRef) {
+    if !path.is_null() {
+        CFRelease(env, path);
+    }
+}
+fn CGPathRetain(env: &mut Environment, path: CGPathRef) -> CGPathRef {
+    if !path.is_null() {
+        CFRetain(env, path)
+    } else {
+        path
+    }
+}
+
+fn CGPathMoveToPoint(
+    env: &mut Environment,
+    path: CGMutablePathRef,
+    _m: crate::mem::ConstPtr<CGAffineTransform>,
+    x: CGFloat,
+    y: CGFloat,
+) {
+    // The optional transform is ignored (touchHLE's path model is minimal).
+    env.objc
+        .borrow_mut::<CGPathHostObject>(path)
+        .subpaths
+        .push((vec![CGPoint { x, y }], false));
+}
+
+fn CGPathAddLineToPoint(
+    env: &mut Environment,
+    path: CGMutablePathRef,
+    _m: crate::mem::ConstPtr<CGAffineTransform>,
+    x: CGFloat,
+    y: CGFloat,
+) {
+    let host_obj = env.objc.borrow_mut::<CGPathHostObject>(path);
+    match host_obj.subpaths.last_mut() {
+        Some((points, _closed)) => points.push(CGPoint { x, y }),
+        None => host_obj.subpaths.push((vec![CGPoint { x, y }], false)),
+    }
+}
+
+fn CGPathCloseSubpath(env: &mut Environment, path: CGMutablePathRef) {
+    if let Some((_points, closed)) = env
+        .objc
+        .borrow_mut::<CGPathHostObject>(path)
+        .subpaths
+        .last_mut()
+    {
+        *closed = true;
+    }
+}
+
+fn CGPathAddRect(
+    env: &mut Environment,
+    path: CGMutablePathRef,
+    _m: crate::mem::ConstPtr<CGAffineTransform>,
+    rect: super::CGRect,
+) {
+    let x0 = rect.origin.x;
+    let y0 = rect.origin.y;
+    let x1 = x0 + rect.size.width;
+    let y1 = y0 + rect.size.height;
+    env.objc.borrow_mut::<CGPathHostObject>(path).subpaths.push((
+        vec![
+            CGPoint { x: x0, y: y0 },
+            CGPoint { x: x1, y: y0 },
+            CGPoint { x: x1, y: y1 },
+            CGPoint { x: x0, y: y1 },
+        ],
+        true,
+    ));
+}
+
+fn CGContextAddPath(env: &mut Environment, context: CGContextRef, path: CGPathRef) {
+    if path.is_null() {
+        return;
+    }
+    let subpaths = env.objc.borrow::<CGPathHostObject>(path).subpaths.clone();
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .path
+        .extend(subpaths);
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextBeginPath(_)),
     export_c_func!(CGContextMoveToPoint(_, _, _)),
@@ -256,4 +382,13 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextClosePath(_)),
     export_c_func!(CGContextClip(_)),
     export_c_func!(CGContextStrokePath(_)),
+    export_c_func!(CGPathCreateMutable()),
+    export_c_func!(CGPathCreateMutableCopy(_)),
+    export_c_func!(CGPathRetain(_)),
+    export_c_func!(CGPathRelease(_)),
+    export_c_func!(CGPathMoveToPoint(_, _, _, _)),
+    export_c_func!(CGPathAddLineToPoint(_, _, _, _)),
+    export_c_func!(CGPathCloseSubpath(_)),
+    export_c_func!(CGPathAddRect(_, _, _)),
+    export_c_func!(CGContextAddPath(_, _)),
 ];
