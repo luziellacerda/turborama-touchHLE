@@ -402,6 +402,24 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (bool)needsDisplay {
     env.objc.borrow::<CALayerHostObject>(this).needs_display
 }
+- (())renderInContext:(CGContextRef)context {
+    // Draw this layer's own content into the given context via the delegate's
+    // drawLayer:inContext:, then recurse into sublayers. Layer transforms and
+    // positions aren't applied, so this is approximate — but it's enough for
+    // the common case of snapshotting a view for a transition effect.
+    let delegate = env.objc.borrow::<CALayerHostObject>(this).delegate;
+    if delegate != nil {
+        let delegate_class = ObjC::read_isa(delegate, &env.mem);
+        if env.objc.class_has_method_named(delegate_class, "drawLayer:inContext:") {
+            () = msg![env; delegate drawLayer:this inContext:context];
+        }
+    }
+    let sublayers = env.objc.borrow::<CALayerHostObject>(this).sublayers.clone();
+    for sublayer in sublayers {
+        () = msg![env; sublayer renderInContext:context];
+    }
+}
+
 - (())setNeedsDisplay {
     env.objc.borrow_mut::<CALayerHostObject>(this).needs_display = true;
 }
