@@ -290,6 +290,15 @@ pub fn init_with_objects_and_keys(
     first_object: id,
     mut va_args: VaList,
 ) -> id {
+    // The argument list is nil-terminated, so a nil first object means an
+    // empty list: the result is an empty dictionary. The remaining varargs
+    // must not be read in that case, as the caller never passed any and the
+    // registers/stack hold unrelated data.
+    if first_object == nil {
+        *env.objc.borrow_mut(this) = <DictionaryHostObject as Default>::default();
+        return this;
+    }
+
     let first_key: id = va_args.next(env);
     assert!(first_key != nil); // TODO: raise proper exception
 

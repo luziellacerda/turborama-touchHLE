@@ -370,9 +370,16 @@ pub const CLASSES: ClassExports = objc_classes! {
 /// Helper method shared between `initWithObjects:` of `_touchHLE_NSSet` and
 /// `_touchHLE_NSMutableSet`
 fn set_from_objects(env: &mut Environment, first_obj: id, args: DotDotDot) -> DictionaryHostObject {
+    let mut dict = <DictionaryHostObject as Default>::default();
+
+    // Nil-terminated list: a nil first object means an empty set, and the
+    // remaining varargs must not be read.
+    if first_obj == nil {
+        return dict;
+    }
+
     let null: id = msg_class![env; NSNull null];
 
-    let mut dict = <DictionaryHostObject as Default>::default();
     dict.insert(env, first_obj, null, /* copy_key: */ false);
     let mut varargs = args.start();
     loop {
