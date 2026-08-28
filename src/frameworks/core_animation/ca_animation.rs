@@ -394,6 +394,9 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())setType:(CATransitionType)transitionType {
     todo_objc_setter!(this, to_rust_string(env, transitionType));
 }
+- (())setSubtype:(CATransitionType)subtype { // CATransitionSubtype (NSString*)
+    todo_objc_setter!(this, to_rust_string(env, subtype));
+}
 
 @end
 
