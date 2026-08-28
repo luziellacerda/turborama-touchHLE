@@ -271,7 +271,7 @@ fn CGImageGetBitsPerComponent(_: &mut Environment, _: CGImageRef) -> GuestUSize 
     8 // Fix this when we support anything else
 }
 
-fn CGImageCreateWithImageInRect(
+pub fn CGImageCreateWithImageInRect(
     env: &mut Environment,
     image: CGImageRef,
     rect: CGRect,

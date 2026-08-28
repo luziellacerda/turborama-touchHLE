@@ -9,14 +9,15 @@ use crate::frameworks::core_graphics::cg_context::{
     CGBlendMode, CGContextDrawImage, CGContextDrawImageWithBlendModeAndAlpha,
 };
 use crate::frameworks::core_graphics::cg_image::{
-    self, CGImageGetHeight, CGImageGetWidth, CGImageRef, CGImageRelease,
-    CGImageRetain,
+    self, CGImageCreateWithImageInRect, CGImageGetHeight, CGImageGetWidth, CGImageRef,
+    CGImageRelease, CGImageRetain,
 };
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::ns_string::get_static_str;
 use crate::frameworks::foundation::{ns_data, ns_string, NSInteger, NSUInteger};
 use crate::frameworks::uikit::ui_graphics::UIGraphicsGetCurrentContext;
 use crate::dyld::{export_c_func, FunctionExports};
+use crate::frameworks::core_foundation::CFRetain;
 use crate::fs::GuestPath;
 use crate::image::Image;
 use crate::mem::MutVoidPtr;
@@ -46,6 +47,10 @@ impl State {
 
 struct UIImageHostObject {
     cg_image: CGImageRef,
+    /// Non-zero for images made by `stretchableImageWithLeftCapWidth:
+    /// topCapHeight:`. The caps are the parts that must not be stretched.
+    left_cap_width: NSInteger,
+    top_cap_height: NSInteger,
 }
 impl HostObject for UIImageHostObject {}
 
@@ -56,7 +61,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 @implementation UIImage: NSObject
 
 + (id)allocWithZone:(NSZonePtr)_zone {
-    let host_object = Box::new(UIImageHostObject { cg_image: nil });
+    let host_object = Box::new(UIImageHostObject {
+        cg_image: nil,
+        left_cap_width: 0,
+        top_cap_height: 0,
+    });
     env.objc.alloc_object(this, host_object, &mut env.mem)
 }
 
@@ -104,7 +113,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())dealloc {
-    let &UIImageHostObject { cg_image } = env.objc.borrow(this);
+    let cg_image = env.objc.borrow::<UIImageHostObject>(this).cg_image;
     CGImageRelease(env, cg_image);
 
     env.objc.dealloc_object(this, &mut env.mem)
@@ -144,10 +153,20 @@ pub const CLASSES: ClassExports = objc_classes! {
     this
 }
 
-- (id)stretchableImageWithLeftCapWidth:(NSInteger)_leftCapWidth
-                          topCapHeight:(NSInteger)_topCapHeight {
-    log!("TODO: properly support stretchableImageWithLeftCapWidth:topCapHeight:");
-    retain(env, this)
+- (id)stretchableImageWithLeftCapWidth:(NSInteger)leftCapWidth
+                          topCapHeight:(NSInteger)topCapHeight {
+    // The result is a distinct image sharing the same bitmap: only the cap
+    // sizes differ, and the original must keep drawing unstretched.
+    let cg_image = env.objc.borrow::<UIImageHostObject>(this).cg_image;
+    CFRetain(env, cg_image);
+    let host_object = Box::new(UIImageHostObject {
+        cg_image,
+        left_cap_width: leftCapWidth,
+        top_cap_height: topCapHeight,
+    });
+    let class = env.objc.get_known_class("UIImage", &mut env.mem);
+    let new = env.objc.alloc_object(class, host_object, &mut env.mem);
+    autorelease(env, new)
 }
 
 // TODO: more init methods
@@ -179,8 +198,25 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (())drawInRect:(CGRect)rect {
     let context = UIGraphicsGetCurrentContext(env);
-    let image = env.objc.borrow::<UIImageHostObject>(this).cg_image;
-    CGContextDrawImage(env, context, rect, image);
+    let &UIImageHostObject {
+        cg_image,
+        left_cap_width,
+        top_cap_height,
+    } = env.objc.borrow(this);
+
+    if left_cap_width == 0 && top_cap_height == 0 {
+        CGContextDrawImage(env, context, rect, cg_image);
+        return;
+    }
+
+    draw_stretchable(
+        env,
+        context,
+        rect,
+        cg_image,
+        left_cap_width as CGFloat,
+        top_cap_height as CGFloat,
+    );
 }
 
 - (())drawAtPoint:(CGPoint)point {
@@ -362,3 +398,86 @@ fn UIImagePNGRepresentation(env: &mut Environment, image: id) -> id {
 }
 
 pub const FUNCTIONS: FunctionExports = &[export_c_func!(UIImagePNGRepresentation(_))];
+
+/// Draw a stretchable ("nine-part") image: the corners keep their size, the
+/// edges stretch along one axis and the centre stretches along both.
+///
+/// The caps are the fixed parts. UIKit takes the left cap width and top cap
+/// height and mirrors them for the right and bottom caps, with the remaining
+/// single row/column of pixels forming the stretchable middle.
+fn draw_stretchable(
+    env: &mut Environment,
+    context: id,
+    rect: CGRect,
+    cg_image: CGImageRef,
+    left_cap: CGFloat,
+    top_cap: CGFloat,
+) {
+    let img_w = CGImageGetWidth(env, cg_image) as CGFloat;
+    let img_h = CGImageGetHeight(env, cg_image) as CGFloat;
+
+    // Source column and row sizes: fixed cap, stretchable middle, fixed cap.
+    let src_mid_w = (img_w - left_cap * 2.0).max(1.0);
+    let src_mid_h = (img_h - top_cap * 2.0).max(1.0);
+    // Destination caps shrink if the target is smaller than the caps alone.
+    let dst_cap_w = left_cap.min(rect.size.width / 2.0);
+    let dst_cap_h = top_cap.min(rect.size.height / 2.0);
+    let dst_mid_w = (rect.size.width - dst_cap_w * 2.0).max(0.0);
+    let dst_mid_h = (rect.size.height - dst_cap_h * 2.0).max(0.0);
+
+    let src_x = [0.0, left_cap, img_w - left_cap];
+    let src_w = [left_cap, src_mid_w, left_cap];
+    let src_y = [0.0, top_cap, img_h - top_cap];
+    let src_h = [top_cap, src_mid_h, top_cap];
+
+    let dst_x = [
+        rect.origin.x,
+        rect.origin.x + dst_cap_w,
+        rect.origin.x + dst_cap_w + dst_mid_w,
+    ];
+    let dst_w = [dst_cap_w, dst_mid_w, dst_cap_w];
+    let dst_y = [
+        rect.origin.y,
+        rect.origin.y + dst_cap_h,
+        rect.origin.y + dst_cap_h + dst_mid_h,
+    ];
+    let dst_h = [dst_cap_h, dst_mid_h, dst_cap_h];
+
+    for col in 0..3 {
+        for row in 0..3 {
+            if src_w[col] <= 0.0 || src_h[row] <= 0.0 || dst_w[col] <= 0.0 || dst_h[row] <= 0.0 {
+                continue;
+            }
+            let piece = CGImageCreateWithImageInRect(
+                env,
+                cg_image,
+                CGRect {
+                    origin: CGPoint {
+                        x: src_x[col],
+                        y: src_y[row],
+                    },
+                    size: CGSize {
+                        width: src_w[col],
+                        height: src_h[row],
+                    },
+                },
+            );
+            CGContextDrawImage(
+                env,
+                context,
+                CGRect {
+                    origin: CGPoint {
+                        x: dst_x[col],
+                        y: dst_y[row],
+                    },
+                    size: CGSize {
+                        width: dst_w[col],
+                        height: dst_h[row],
+                    },
+                },
+                piece,
+            );
+            CGImageRelease(env, piece);
+        }
+    }
+}
