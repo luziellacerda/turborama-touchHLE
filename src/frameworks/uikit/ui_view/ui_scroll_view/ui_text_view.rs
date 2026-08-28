@@ -184,6 +184,14 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.borrow_mut::<UITextViewHostObject>(this).editable = editable;
 }
 
+// Not really a UITextView property (it belongs to UIControl), but apps set it
+// on text views anyway. Accepted and ignored.
+- (())setEnabled:(bool)_enabled {
+}
+- (bool)isEnabled {
+    true
+}
+
 - (())scrollRangeToVisible:(NSRange)range {
     let &mut UITextViewHostObject {
         font,
