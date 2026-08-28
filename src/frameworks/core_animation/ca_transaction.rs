@@ -44,6 +44,19 @@ impl ThreadLocalState {
             .or(thread_state.implicit_transaction.as_mut())
     }
 
+    /// Like [Self::get_current_transaction_mut], but if there is no current
+    /// transaction, lazily creates the implicit one (as iOS does when
+    /// CATransaction state is set outside an explicit begin/commit block),
+    /// so callers can rely on a transaction always being present.
+    pub fn get_or_create_current_transaction_mut(env: &mut Environment) -> &mut Transaction {
+        if ThreadLocalState::get_current_transaction_mut(env).is_none() {
+            let transaction = Transaction::new(env);
+            let thread_state = ThreadLocalState::get_mut(env);
+            thread_state.implicit_transaction = Some(transaction);
+        }
+        ThreadLocalState::get_current_transaction_mut(env).unwrap()
+    }
+
     pub fn add_animation(env: &mut Environment, layer: id, animation: id) {
         let layer_class = msg![env; layer class];
         let ca_layer = env.objc.get_known_class("CALayer", &mut env.mem);
@@ -169,14 +182,14 @@ pub const CLASSES: ClassExports = objc_classes! {
     match &*key_string  {
         kCATransactionAnimationDuration => {
             let value: CFTimeInterval = msg![env; value doubleValue];
-            ThreadLocalState::get_current_transaction_mut(env).unwrap().animation_duration = value;
+            ThreadLocalState::get_or_create_current_transaction_mut(env).animation_duration = value;
         },
         kCATransactionDisableActions => {
             let value: bool = msg![env; value boolValue];
-            ThreadLocalState::get_current_transaction_mut(env).unwrap().disable_actions = value;
+            ThreadLocalState::get_or_create_current_transaction_mut(env).disable_actions = value;
         },
         kCATransactionAnimationTimingFunction => {
-            let transaction = ThreadLocalState::get_current_transaction_mut(env).unwrap();
+            let transaction = ThreadLocalState::get_or_create_current_transaction_mut(env);
             let old_value = std::mem::replace(&mut transaction.animation_timing_function, value);
             retain(env, value);
             release(env, old_value);
@@ -185,7 +198,7 @@ pub const CLASSES: ClassExports = objc_classes! {
             unimplemented!();
         },
         _ => {
-            let transaction = ThreadLocalState::get_current_transaction_mut(env).unwrap();
+            let transaction = ThreadLocalState::get_or_create_current_transaction_mut(env);
             let old_value = transaction.data.insert(key_string.to_string(), value).unwrap_or(nil);
             retain(env, value);
             release(env, old_value);
@@ -196,21 +209,29 @@ pub const CLASSES: ClassExports = objc_classes! {
     let key_string = to_rust_string(env, key);
     let value = match &*key_string {
         kCATransactionAnimationDuration => {
-            let animation_duration = ThreadLocalState::get_current_transaction(env).unwrap().animation_duration;
+            let animation_duration = ThreadLocalState::get_current_transaction(env)
+                .map(|t| t.animation_duration)
+                .unwrap_or(0.25); // iOS default when no transaction is active
             msg_class![env; NSNumber numberWithDouble:animation_duration]
         },
         kCATransactionDisableActions => {
-            let disable_actions = ThreadLocalState::get_current_transaction(env).unwrap().disable_actions;
+            let disable_actions = ThreadLocalState::get_current_transaction(env)
+                .map(|t| t.disable_actions)
+                .unwrap_or(false);
             msg_class![env; NSNumber numberWithBool:disable_actions]
         },
         kCATransactionAnimationTimingFunction => {
-            ThreadLocalState::get_current_transaction(env).unwrap().animation_timing_function
+            ThreadLocalState::get_current_transaction(env)
+                .map(|t| t.animation_timing_function)
+                .unwrap_or(nil)
         },
         kCATransactionCompletionBlock => {
             unimplemented!()
         },
         _ => {
-            ThreadLocalState::get_current_transaction(env).unwrap().data.get(&*key_string).cloned().unwrap_or(nil)
+            ThreadLocalState::get_current_transaction(env)
+                .and_then(|t| t.data.get(&*key_string).cloned())
+                .unwrap_or(nil)
         }
     };
     log_dbg!("[CATransaction valueForKey:{:?} ({})] => {:?}", key, key_string, value);
