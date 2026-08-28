@@ -249,7 +249,12 @@ impl State {
                     );
                     presentation.position = from_value + by_value * interpolation_amount;
                 }
-                _ => panic!("Attempted to animate on key {}", key_path),
+                _ => {
+                    // Unknown or empty key paths (e.g. CATransition, which
+                    // animates the whole layer rather than a property) aren't
+                    // supported; skip rather than crashing.
+                    log_dbg!("Ignoring animation on unsupported key {:?}", key_path);
+                }
             }
         }
 
