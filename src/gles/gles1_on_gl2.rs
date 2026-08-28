@@ -1324,6 +1324,19 @@ impl GLES for GLES1OnGL2<'_> {
         }
     }
 
+    unsafe fn PointSizePointerOES(
+        &mut self,
+        _type_: GLenum,
+        _stride: GLsizei,
+        _pointer: *const GLvoid,
+    ) {
+        // Desktop GL 2.1 has no GL_OES_point_size_array, so per-point sizes
+        // can't be forwarded here. Points will use the single glPointSize value
+        // instead. This backend is only used where native GLES 1.1 is
+        // unavailable.
+        log!("Warning: PointSizePointerOES ignored (unsupported on the GL 2.1 backend)");
+    }
+
     // Drawing
     unsafe fn DrawArrays(&mut self, mode: GLenum, first: GLint, count: GLsizei) {
         assert!([
