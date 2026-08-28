@@ -23,7 +23,8 @@
 
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::libc::errno::{
-    set_errno, EBADF, ECONNREFUSED, ECONNRESET, EINVAL, ENOTCONN, EPIPE, EPROTONOSUPPORT, ETIMEDOUT,
+    set_errno, EBADF, ECONNREFUSED, ECONNRESET, EINPROGRESS, EINVAL, ENOTCONN, EPIPE,
+    EPROTONOSUPPORT, ETIMEDOUT,
 };
 use crate::libc::posix_io::{close, find_or_create_socket, is_socket, FileDescriptor};
 use crate::libc::time::timeval;
@@ -130,6 +131,9 @@ struct SocketHostObject {
     tcp_stream: Option<TcpStream>,
     /// UDP socket
     udp_socket: Option<UdpSocket>,
+    /// Whether the guest put this socket in non-blocking mode via FIONBIO.
+    /// This changes what `connect()` is expected to return.
+    nonblocking: bool,
 }
 
 #[derive(Default)]
@@ -173,6 +177,7 @@ fn socket(env: &mut Environment, domain: i32, type_: i32, protocol: i32) -> File
         pending_tcp_stream: None,
         tcp_stream: None,
         udp_socket: None,
+        nonblocking: false,
     };
     State::get_mut(env).sockets.insert(fd, host_object);
 
@@ -204,11 +209,12 @@ fn ioctl(env: &mut Environment, fd: i32, request: u32, args: DotDotDot) -> i32 {
         } else {
             env.mem.read(value_ptr)
         };
-        log_dbg!(
-            "ioctl({} (socket), FIONBIO, {}) => 0 (sockets are always non-blocking)",
-            fd,
-            nonblocking
-        );
+        State::get_mut(env)
+            .sockets
+            .get_mut(&fd)
+            .unwrap()
+            .nonblocking = nonblocking != 0;
+        log_dbg!("ioctl({} (socket), FIONBIO, {}) => 0", fd, nonblocking);
         return 0;
     }
 
@@ -533,11 +539,27 @@ fn connect(
     // We set host socket as non-blocking in order to have
     // more control of how and when it's used
     host_stream.set_nonblocking(true).unwrap();
-    State::get_mut(env)
-        .sockets
-        .get_mut(&socket)
-        .unwrap()
-        .tcp_stream = Some(host_stream);
+    let nonblocking = {
+        let sock = State::get_mut(env).sockets.get_mut(&socket).unwrap();
+        sock.tcp_stream = Some(host_stream);
+        sock.nonblocking
+    };
+
+    if nonblocking {
+        // On a non-blocking socket, connect() is expected to return -1 with
+        // EINPROGRESS and to be completed by waiting for writability with
+        // select(). touchHLE connects synchronously, so the connection is in
+        // fact already established and select() will report it writable right
+        // away - but the guest still has to see the answer it asked for. Apps
+        // that only implement the EINPROGRESS path treat an immediate success
+        // as a failure and throw the working connection away.
+        log_dbg!(
+            "connect: socket {} is non-blocking, reporting EINPROGRESS",
+            socket
+        );
+        set_errno(env, EINPROGRESS);
+        return -1;
+    }
 
     0 // Success
 }
@@ -898,6 +920,8 @@ fn accept(
             pending_tcp_stream: None,
             tcp_stream: Some(stream),
             udp_socket: None,
+            // An accepted socket starts out blocking, like on a real system.
+            nonblocking: false,
         };
         State::get_mut(env).sockets.insert(new_fd, host_object);
         assert!(!address.is_null());
