@@ -1446,6 +1446,22 @@ pub const CLASSES: ClassExports = objc_classes! {
     this
 }
 
+- (id)initWithBytesNoCopy:(MutPtr<u8>)bytes
+                   length:(NSUInteger)len
+                 encoding:(NSStringEncoding)encoding
+             freeWhenDone:(bool)free_when_done {
+    // touchHLE always copies the bytes into its own storage, so there's no
+    // genuine "no copy" path; decode as usual, then honour freeWhenDone: by
+    // releasing the guest buffer.
+    let slice = env.mem.bytes_at(bytes.cast_const(), len);
+    let host_object = StringHostObject::decode(Cow::Borrowed(slice), encoding);
+    *env.objc.borrow_mut(this) = host_object;
+    if free_when_done && !bytes.is_null() {
+        env.mem.free(bytes.cast());
+    }
+    this
+}
+
 - (id)initWithCharacters:(ConstPtr<unichar>)characters length:(NSUInteger)len {
     assert!(!characters.is_null());
     let num_bytes = len * 2;
