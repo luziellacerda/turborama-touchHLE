@@ -62,6 +62,15 @@ pub const CLASSES: ClassExports = objc_classes! {
     }
 }
 
++ (())resetStandardUserDefaults {
+    // Real NSUserDefaults releases the in-memory shared instance after
+    // synchronizing. touchHLE keeps the defaults; just synchronize any existing
+    // shared instance so nothing is lost.
+    if let Some(existing) = State::get(env).standard_defaults {
+        let _: bool = msg![env; existing synchronize];
+    }
+}
+
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(NSUserDefaultsHostObject {
         global_domain_dict: nil,
