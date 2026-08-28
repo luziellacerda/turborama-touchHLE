@@ -460,7 +460,16 @@ impl Window {
             let out_x = (x + 0.5) * out_w as f32;
             let out_y = (y + 0.5) * out_h as f32;
             // Round to match touch precision of official devices.
-            (out_x.round(), out_y.round())
+            let (out_x, out_y) = (out_x.round(), out_y.round());
+            // Input can land outside the viewport (in the letterbox bars) or
+            // exactly on the far edge, which the exclusive bounds check in
+            // CGRectContainsPoint rejects — such touches would be discarded and
+            // the app would appear unresponsive. A real device has no letterbox,
+            // so clamp to the nearest point that is actually inside the screen.
+            (
+                out_x.clamp(0.0, (out_w - 1) as f32),
+                out_y.clamp(0.0, (out_h - 1) as f32),
+            )
         }
         fn transform_virt_accel_coords(window: &Window, (in_x, in_y): (i32, i32)) -> (f32, f32) {
             let (_, _, vw, vh) = window.viewport();
