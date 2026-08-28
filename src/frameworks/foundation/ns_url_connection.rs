@@ -110,11 +110,17 @@ pub const CLASSES: ClassExports = objc_classes! {
 
     // Deliver on a later run loop iteration, not synchronously: the app has
     // usually not finished setting up its state when this returns.
+    //
+    // It has to go on the run loop of the thread that started the connection,
+    // which is what Apple does by default, and not on the main one. Apps
+    // commonly start a connection on a worker thread and then park that thread
+    // in `runMode:beforeDate:` waiting for the callback; delivering elsewhere
+    // leaves it waiting forever.
     let selector = env
         .objc
         .lookup_selector("_touchHLE_deliverConnectionFailure")
         .unwrap();
-    let run_loop: id = msg_class![env; NSRunLoop mainRunLoop];
+    let run_loop: id = msg_class![env; NSRunLoop currentRunLoop];
     add_perform_request(env, run_loop, this, selector, nil, Some(0.0), false);
 
     this
