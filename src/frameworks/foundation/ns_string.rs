@@ -564,6 +564,48 @@ pub const CLASSES: ClassExports = objc_classes! {
     NSRange { location: NSNotFound as NSUInteger, length: 0 }
 }
 
+- (NSRange)rangeOfString:(id)search_string
+                 options:(NSStringCompareOptions)options
+                   range:(NSRange)range { // NSString *
+    // Search only within `range`, then translate the result back into this
+    // string's coordinates. Delegating to rangeOfString:options: reuses its
+    // option handling rather than duplicating the search.
+    //
+    // Real UIKit raises NSRangeException if the range exceeds the string, but
+    // touchHLE can't raise, and apps do hit this: a word-wrapping loop that
+    // walks a position past the end computes a range with an underflowed
+    // length. Clamping turns that into an empty search that reports
+    // NSNotFound, which lets such a loop terminate normally.
+    // NSRange isn't Copy, so read its fields before it is moved.
+    let (req_location, req_length) = (range.location, range.length);
+    let len: NSUInteger = msg![env; this length];
+
+    let start = req_location.min(len);
+    let end = req_location.saturating_add(req_length).min(len);
+    if start >= end {
+        return NSRange { location: NSNotFound as NSUInteger, length: 0 };
+    }
+    if start != req_location || end - start != req_length {
+        log_dbg!(
+            "[(NSString *){:?} rangeOfString:options:range:] clamped range {}..+{} to {}..+{} (length {})",
+            this, req_location, req_length, start, end - start, len
+        );
+    }
+
+    let clamped = NSRange { location: start, length: end - start };
+    let substring: id = msg![env; this substringWithRange:clamped];
+    let found: NSRange = msg![env; substring rangeOfString:search_string
+                                                   options:options];
+    if found.location == NSNotFound as NSUInteger {
+        found
+    } else {
+        NSRange {
+            location: found.location + start,
+            length: found.length,
+        }
+    }
+}
+
 - (NSRange)rangeOfCharacterFromSet:(id)set { // NSCharacterSet *
     let length: NSUInteger = msg![env; this length];
     let mut idx: NSUInteger = 0;
