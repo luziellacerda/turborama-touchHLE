@@ -132,6 +132,7 @@ pub struct State {
     time: time::State,
     errno: errno::State,
     clocale: clocale::State,
+    crypto: crypto::State,
     mach_vm: mach::vm_map::State,
     malloc: malloc::State,
     mman: sys::mman::State,
