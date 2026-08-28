@@ -8,8 +8,9 @@
 //! References:
 //! - Apple's [Preferences and Settings Programming Guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/UserDefaults/AboutPreferenceDomains/AboutPreferenceDomains.html).
 
-use super::{ns_string, NSInteger};
+use super::{ns_string, NSInteger, NSUInteger};
 use crate::frameworks::foundation::ns_string::to_rust_string;
+use crate::mem::MutVoidPtr;
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, Class, ClassExports, HostObject,
     NSZonePtr,
@@ -297,6 +298,24 @@ pub const CLASSES: ClassExports = objc_classes! {
     let plist_file_path = ns_string::from_rust_string(env, plist_file_path_buf.as_str().to_string());
     let dict = env.objc.borrow::<NSUserDefaultsHostObject>(this).app_domain_dict;
     msg![env; dict writeToFile:plist_file_path atomically:true]
+}
+
+// Key-Value Observing. touchHLE has no KVO machinery, and NSUserDefaults
+// values can only change from within the app itself (there's no Settings.app
+// or external process to change them behind the app's back), so registering
+// an observer and then never delivering a change notification is harmless in
+// practice: the app reads the current value directly at startup and simply
+// won't receive later callbacks it wouldn't get anyway. Accept and ignore.
+- (())addObserver:(id)_observer
+        forKeyPath:(id)_key_path // NSString*
+           options:(NSUInteger)_options // NSKeyValueObservingOptions
+           context:(MutVoidPtr)_context {
+    // TODO: real KVO support
+}
+
+- (())removeObserver:(id)_observer
+          forKeyPath:(id)_key_path { // NSString*
+    // TODO: real KVO support (paired with addObserver:forKeyPath:options:context:)
 }
 
 @end
