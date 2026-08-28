@@ -5,7 +5,7 @@
  */
 //! EAGL.
 
-use crate::dyld::{ConstantExports, HostConstant};
+use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::core_animation::ca_eagl_layer::{
     find_fullscreen_eagl_layer, get_pixels_vec_for_presenting, present_pixels,
 };
@@ -760,3 +760,17 @@ unsafe fn present_renderbuffer(env: &mut Environment) {
 
     // { let err = gles.GetError(); if err != 0 { panic!("{:#x}", err); } }
 }
+
+/// `void EAGLGetVersion(unsigned int *major, unsigned int *minor)`
+///
+/// Reports the EAGL API version. iOS has only ever had EAGL 1.0.
+fn EAGLGetVersion(env: &mut Environment, major: MutPtr<GLuint>, minor: MutPtr<GLuint>) {
+    if !major.is_null() {
+        env.mem.write(major, 1);
+    }
+    if !minor.is_null() {
+        env.mem.write(minor, 0);
+    }
+}
+
+pub const FUNCTIONS: FunctionExports = &[export_c_func!(EAGLGetVersion(_, _))];
