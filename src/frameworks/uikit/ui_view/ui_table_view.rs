@@ -89,6 +89,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())setSeparatorStyle:(NSInteger)_style {
     // No separators are drawn; accepted for compatibility.
 }
+- (())setEditing:(bool)_editing {
+    // Edit mode isn't implemented; accepted for compatibility.
+}
+- (())setEditing:(bool)_editing animated:(bool)_animated {
+}
 - (())setBackgroundColor:(id)color {
     () = msg_super![env; this setBackgroundColor:color];
 }
