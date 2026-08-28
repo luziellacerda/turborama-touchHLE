@@ -9,7 +9,8 @@
 //! Here it is the same type.
 
 use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
-use super::{CFComparisonResult, CFIndex, CFTypeRef};
+use super::cf_type::type_id_for_class;
+use super::{CFComparisonResult, CFIndex, CFTypeID, CFTypeRef};
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::foundation::ns_value::is_conversion_lossless;
 use crate::mem::{ConstVoidPtr, MutVoidPtr};
@@ -139,9 +140,16 @@ pub const CONSTANTS: ConstantExports = &[
     ),
 ];
 
+fn CFNumberGetTypeID(env: &mut Environment) -> CFTypeID {
+    // Must match what CFGetTypeID returns for a CFNumber, which normalizes to
+    // the NSNumber base class pointer.
+    type_id_for_class(env, "NSNumber")
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFNumberCreate(_, _, _)),
     export_c_func!(CFNumberGetValue(_, _, _)),
     export_c_func!(CFNumberCompare(_, _, _)),
+    export_c_func!(CFNumberGetTypeID()),
     export_c_func!(CFBooleanGetValue(_)),
 ];
