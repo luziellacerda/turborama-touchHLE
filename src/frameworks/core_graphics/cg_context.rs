@@ -28,7 +28,13 @@ type CGInterpolationQuality = i32;
 
 type CGTextDrawingMode = i32;
 const kCGTextFill: CGTextDrawingMode = 0;
+const kCGTextStroke: CGTextDrawingMode = 1;
 const kCGTextFillStroke: CGTextDrawingMode = 2;
+const kCGTextInvisible: CGTextDrawingMode = 3;
+const kCGTextFillClip: CGTextDrawingMode = 4;
+const kCGTextStrokeClip: CGTextDrawingMode = 5;
+const kCGTextFillStrokeClip: CGTextDrawingMode = 6;
+const kCGTextClip: CGTextDrawingMode = 7;
 
 pub type CGBlendMode = i32;
 pub const kCGBlendModeNormal: CGBlendMode = 0;
@@ -489,7 +495,26 @@ fn CGContextSetTextDrawingMode(
     _context: CGContextRef,
     mode: CGTextDrawingMode,
 ) {
-    assert!(mode == kCGTextFill || mode == kCGTextFillStroke); // TODO: support other modes
+    // touchHLE always draws text filled. Stroking and the clipping modes are
+    // not supported, but drawing filled text is much closer to what the app
+    // wants than aborting, and kCGTextInvisible is only used for measuring, in
+    // which case what gets drawn does not matter either.
+    match mode {
+        kCGTextFill | kCGTextFillStroke => {}
+        kCGTextStroke | kCGTextInvisible | kCGTextFillClip | kCGTextStrokeClip
+        | kCGTextFillStrokeClip | kCGTextClip => {
+            log!(
+                "TODO: CGContextSetTextDrawingMode() mode {}, drawing filled text instead",
+                mode
+            );
+        }
+        _ => {
+            log!(
+                "Warning: CGContextSetTextDrawingMode() unknown mode {}, ignoring",
+                mode
+            );
+        }
+    }
 }
 
 fn CGContextSetTextMatrix(
