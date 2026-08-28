@@ -70,6 +70,15 @@ pub const CLASSES: ClassExports = objc_classes! {
     this
 }
 
+// The original (pre-iOS-3.0) initializer, still used by older apps.
+- (id)initWithFrame:(CGRect)frame
+    reuseIdentifier:(id)reuse_identifier { // NSString*
+    let this: id = msg![env; this initWithFrame:frame];
+    retain(env, reuse_identifier);
+    env.objc.borrow_mut::<UITableViewCellHostObject>(this).reuse_identifier = reuse_identifier;
+    this
+}
+
 - (())dealloc {
     let &UITableViewCellHostObject {
         text_label,
