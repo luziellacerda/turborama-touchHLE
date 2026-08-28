@@ -1492,6 +1492,11 @@ pub fn open_url(env: &mut Environment, url: &str) -> Result<(), String> {
 /// messagebox, which is not required but should be done if possible.
 pub fn show_error_messagebox(window: Option<&Window>, error_message: &str) {
     assert!(window.is_none_or(|win| win.on_main_stack));
+    // Always log the error first. On platforms with no windowing system (e.g.
+    // a framebuffer-only device) the message box below cannot be shown, and
+    // without this the actual error would be replaced by the unhelpful
+    // "Failed to show message box!" panic.
+    echo!("touchHLE crashed with the following error: {}", error_message);
     use sdl2::messagebox;
     let mbox = [
         messagebox::ButtonData {
@@ -1514,7 +1519,11 @@ pub fn show_error_messagebox(window: Option<&Window>, error_message: &str) {
         window.map(|win| &win.window),
         None,
     ) else {
-        panic!("Failed to show message box!");
+        // No message box is available (headless, framebuffer-only, or no
+        // display server). The error has already been logged above, so there
+        // is nothing more to do and no reason to panic over it.
+        echo!("(Could not display an error message box.)");
+        return;
     };
 
     match clicked_button {
