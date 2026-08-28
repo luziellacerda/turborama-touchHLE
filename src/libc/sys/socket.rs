@@ -179,9 +179,31 @@ fn socket(env: &mut Environment, domain: i32, type_: i32, protocol: i32) -> File
 }
 
 fn ioctl(env: &mut Environment, fd: i32, request: u32, _args: DotDotDot) -> i32 {
-    assert!(is_socket(env, fd));
+    if !is_socket(env, fd) {
+        // POSIX answers EBADF rather than aborting, and apps reach here with a
+        // stale or failed descriptor often enough that it must not be fatal.
+        log!("TODO: ioctl({} (not a socket), {:#x?}, ...) => -1", fd, request);
+        return -1;
+    }
     log!("TODO: ioctl({} (socket), {:#x?}, ...) => -1", fd, request);
     -1
+}
+
+/// Check that `socket` refers to a socket this process opened, setting `EBADF`
+/// if not.
+///
+/// Apps hand invalid descriptors to these functions routinely: -1 from a failed
+/// `socket()` or `connect()` gets passed straight on without being checked,
+/// which is harmless on a real system because the call just fails with EBADF.
+/// touchHLE used to index its socket table with it and panic, taking the whole
+/// emulator down over a recoverable error.
+fn check_socket_fd(env: &mut Environment, socket: i32) -> bool {
+    if State::get(env).sockets.contains_key(&socket) {
+        return true;
+    }
+    log_dbg!("Socket call on invalid descriptor {}, returning EBADF", socket);
+    set_errno(env, EBADF);
+    false
 }
 
 fn getsockopt(
@@ -313,6 +335,9 @@ fn bind(
     address: ConstPtr<sockaddr>,
     address_len: socklen_t,
 ) -> i32 {
+    if !check_socket_fd(env, socket) {
+        return -1;
+    }
     // TODO: handle errno properly
     set_errno(env, 0);
 
@@ -381,6 +406,9 @@ fn bind(
 }
 
 fn listen(env: &mut Environment, socket: i32, backlog: i32) -> i32 {
+    if !check_socket_fd(env, socket) {
+        return -1;
+    }
     // TODO: handle errno properly
     set_errno(env, 0);
 
@@ -405,6 +433,9 @@ fn connect(
     address: ConstPtr<sockaddr>,
     address_len: socklen_t,
 ) -> i32 {
+    if !check_socket_fd(env, socket) {
+        return -1;
+    }
     // TODO: handle errno properly
     set_errno(env, 0);
 
@@ -466,9 +497,21 @@ fn select(
         // Apparently, this is a portable way of using select() as usleep()
         // https://stackoverflow.com/questions/3125645/why-use-select-instead-of-sleep
         // ¯\_(ツ)_/¯
-        assert!(read_fds.is_null());
-        assert!(write_fds.is_null());
-        assert!(error_fds.is_null());
+        //
+        // The sets aren't necessarily null, though: apps pass their usual ones
+        // and just narrow n_fds. No descriptor is in range, so none can be
+        // ready, and POSIX has us clear the sets and report zero.
+        for set_ptr in [read_fds, write_fds, error_fds] {
+            if !set_ptr.is_null() {
+                env.mem.write(set_ptr, fd_set { fds_bits: [0; 32] });
+            }
+        }
+        if timeout.is_null() {
+            // select(0, ..., NULL) would block forever with nothing able to
+            // wake it. Returning immediately is the more useful reading.
+            log_dbg!("select() with no descriptors and no timeout, returning 0");
+            return 0;
+        }
         let timeval = env.mem.read(timeout);
         let duration = Duration::from_secs(timeval.tv_sec.try_into().unwrap())
             + Duration::from_micros(timeval.tv_usec.try_into().unwrap());
@@ -499,8 +542,13 @@ fn select(
         log_dbg!("select: read_set before {:?}", read_set);
         count += process_set(env, &mut read_set, n_fds, |env, fd, bits, bit_index| {
             log_dbg!("select: bit set in read_set at fd: {}", fd);
-            // Only sockets for now
-            assert!(is_socket(env, fd));
+            // Only sockets for now; anything else is reported as not ready
+            // rather than aborting.
+            if !is_socket(env, fd) {
+                log_dbg!("select: fd {} is not a socket, reporting not ready", fd);
+                *bits &= !(1 << bit_index);
+                return false;
+            }
             // Clean bit in the set for the current socket
             *bits &= !(1 << bit_index);
             let socket_host_object = State::get(env).sockets.get(&fd).unwrap();
@@ -636,8 +684,13 @@ fn select(
         log_dbg!("select: write_set before {:?}", write_set);
         count += process_set(env, &mut write_set, n_fds, |env, fd, bits, bit_index| {
             log_dbg!("select: bit set in write_set at fd: {}", fd);
-            // Only sockets for now
-            assert!(is_socket(env, fd));
+            // Only sockets for now; anything else is reported as not ready
+            // rather than aborting.
+            if !is_socket(env, fd) {
+                log_dbg!("select: fd {} is not a socket, reporting not ready", fd);
+                *bits &= !(1 << bit_index);
+                return false;
+            }
             // Clean bit in the set for the current socket
             *bits &= !(1 << bit_index);
             let socket_host_object = State::get(env).sockets.get(&fd).unwrap();
@@ -682,8 +735,13 @@ fn select(
         log_dbg!("select: error_set before {:?}", error_set);
         count += process_set(env, &mut error_set, n_fds, |env, fd, bits, bit_index| {
             log_dbg!("select: bit set in error_set at fd: {}", fd);
-            // Only sockets for now
-            assert!(is_socket(env, fd));
+            // Only sockets for now; anything else is reported as not ready
+            // rather than aborting.
+            if !is_socket(env, fd) {
+                log_dbg!("select: fd {} is not a socket, reporting not ready", fd);
+                *bits &= !(1 << bit_index);
+                return false;
+            }
             // Clean bit in the set for the current socket
             *bits &= !(1 << bit_index);
             let socket_host_object = State::get(env).sockets.get(&fd).unwrap();
@@ -743,6 +801,9 @@ fn accept(
     address: MutPtr<sockaddr>,
     address_len: MutPtr<socklen_t>,
 ) -> FileDescriptor {
+    if !check_socket_fd(env, socket) {
+        return -1;
+    }
     // TODO: handle errno properly
     set_errno(env, 0);
 
@@ -812,6 +873,9 @@ fn recv(
     length: GuestUSize,
     flags: i32,
 ) -> i32 {
+    if !check_socket_fd(env, socket) {
+        return -1;
+    }
     recvfrom(env, socket, buffer, length, flags, Ptr::null(), Ptr::null())
 }
 
@@ -824,6 +888,9 @@ fn recvfrom(
     address: MutPtr<sockaddr>,
     address_len: MutPtr<socklen_t>,
 ) -> i32 {
+    if !check_socket_fd(env, socket) {
+        return -1;
+    }
     // TODO: handle errno properly
     set_errno(env, 0);
 
@@ -935,6 +1002,9 @@ fn send(
     length: GuestUSize,
     flags: i32,
 ) -> i32 {
+    if !check_socket_fd(env, socket) {
+        return -1;
+    }
     // TODO: handle errno properly
     set_errno(env, 0);
 
@@ -987,6 +1057,9 @@ fn sendto(
     dest_address: MutPtr<sockaddr>,
     dest_address_len: socklen_t,
 ) -> i32 {
+    if !check_socket_fd(env, socket) {
+        return -1;
+    }
     // TODO: handle errno properly
     set_errno(env, 0);
 
@@ -1079,6 +1152,9 @@ fn sendto(
 
 const SHUT_RDWR: i32 = 2;
 fn shutdown(env: &mut Environment, socket: i32, how: i32) -> i32 {
+    if !check_socket_fd(env, socket) {
+        return -1;
+    }
     log_dbg!("shutdown({}, {})", socket, how);
     assert_eq!(how, SHUT_RDWR);
     close(env, socket)

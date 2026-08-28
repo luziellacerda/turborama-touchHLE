@@ -1064,18 +1064,20 @@ pub fn find_or_create_socket(env: &mut Environment) -> FileDescriptor {
     find_or_create_fd(env, host_object)
 }
 
-/// Helper function for socket check, not part of API
+/// Helper function for socket check, not part of API.
+///
+/// Returns false for any descriptor that isn't an open socket, including
+/// invalid ones. Apps do pass those: -1 from a failed `socket()` or `open()`
+/// gets handed straight to another call without being checked.
 pub fn is_socket(env: &mut Environment, fd: FileDescriptor) -> bool {
-    let guest_file = &env
-        .libc_state
-        .posix_io
-        .files
-        .get(fd_to_file_idx(fd))
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        .file;
-    matches!(guest_file, GuestFile::Socket)
+    let Some(file_idx) = fd.checked_sub(NORMAL_FILENO_BASE).and_then(|i| usize::try_from(i).ok())
+    else {
+        return false;
+    };
+    let Some(Some(file)) = env.libc_state.posix_io.files.get(file_idx) else {
+        return false;
+    };
+    matches!(file.file, GuestFile::Socket)
 }
 
 /// Helper function to validate lock, not part of API. Assumes fd is a valid
