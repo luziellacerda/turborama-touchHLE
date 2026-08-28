@@ -636,6 +636,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (NSComparisonResult)caseInsensitiveCompare:(id)other { //NSString*
     msg![env; this compare:other options:NSCaseInsensitiveSearch]
 }
+- (NSComparisonResult)localizedCaseInsensitiveCompare:(id)other { // NSString*
+    // touchHLE doesn't do locale-aware collation, so this is the same as the
+    // non-localized case-insensitive comparison.
+    msg![env; this caseInsensitiveCompare:other]
+}
 
 - (NSComparisonResult)compare:(id)other // NSString*
                       options:(NSStringCompareOptions)options
