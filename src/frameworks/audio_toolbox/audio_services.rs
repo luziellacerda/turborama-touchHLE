@@ -12,6 +12,7 @@ use crate::audio::openal::al_types::*;
 use crate::audio::openal::{OpenAL, OpenALManager};
 
 use super::audio_queue::decode_buffer;
+use crate::abi::GuestFunction;
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::carbon_core::OSStatus;
 use crate::frameworks::core_audio_types::{fourcc, AudioStreamBasicDescription};
@@ -200,9 +201,36 @@ fn AudioServicesDisposeSystemSoundID(
     }
 }
 
+/// `OSStatus AudioServicesAddSystemSoundCompletion(SystemSoundID, CFRunLoopRef,
+/// CFStringRef, AudioServicesSystemSoundCompletionProc, void*)`
+///
+/// touchHLE doesn't track when a system sound finishes, so the completion
+/// callback is never invoked. Registration is accepted so the app keeps
+/// running; the sound still plays, only the finished-notification is missing.
+fn AudioServicesAddSystemSoundCompletion(
+    _env: &mut Environment,
+    _sys_sound_id: SystemSoundID,
+    _run_loop: MutVoidPtr,
+    _run_loop_mode: MutVoidPtr,
+    _completion_proc: GuestFunction,
+    _client_data: MutVoidPtr,
+) -> OSStatus {
+    // TODO: actually invoke the completion callback when the sound finishes.
+    0 // noErr
+}
+
+fn AudioServicesRemoveSystemSoundCompletion(
+    _env: &mut Environment,
+    _sys_sound_id: SystemSoundID,
+) {
+    // no-op (no completion was registered to remove)
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioServicesCreateSystemSoundID(_, _)),
     export_c_func!(AudioServicesGetProperty(_, _, _, _, _)),
     export_c_func!(AudioServicesPlaySystemSound(_)),
     export_c_func!(AudioServicesDisposeSystemSoundID(_)),
+    export_c_func!(AudioServicesAddSystemSoundCompletion(_, _, _, _, _)),
+    export_c_func!(AudioServicesRemoveSystemSoundCompletion(_)),
 ];
