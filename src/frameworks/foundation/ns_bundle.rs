@@ -75,6 +75,12 @@ pub const CLASSES: ClassExports = objc_classes! {
    }
 }
 
++ (id)bundleForClass:(id)_class {
+    // Every class in an app comes from the app binary, so this is always the
+    // main bundle.
+    msg![env; this mainBundle]
+}
+
 + (id)bundleWithPath:(id)path { // NSString*
     // The NSBundleHostObject-creating allocWithZone: lives on the static
     // subclass (see mainBundle); allocating NSBundle directly would yield a
