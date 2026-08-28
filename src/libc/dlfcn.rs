@@ -6,10 +6,30 @@
 //! `dlfcn.h` (`dlopen()` and friends)
 
 use crate::dyld::{export_c_func, FunctionExports};
-use crate::mem::{ConstPtr, MutVoidPtr, Ptr};
+use crate::mem::{ConstPtr, ConstVoidPtr, MutPtr, MutVoidPtr, Ptr, SafeRead};
 use crate::Environment;
 
 const RTLD_DEFAULT: MutVoidPtr = Ptr::from_bits(-2 as _);
+
+/// `Dl_info` as filled in by `dladdr()`. Four guest pointers, matching the
+/// Darwin/iPhoneOS layout:
+/// ```c
+/// typedef struct dl_info {
+///     const char *dli_fname; // pathname of shared object
+///     void       *dli_fbase; // base address of shared object
+///     const char *dli_sname; // name of nearest symbol
+///     void       *dli_saddr; // address of nearest symbol
+/// } Dl_info;
+/// ```
+#[allow(non_camel_case_types)]
+#[repr(C, packed)]
+struct Dl_info {
+    dli_fname: ConstPtr<u8>,
+    dli_fbase: MutVoidPtr,
+    dli_sname: ConstPtr<u8>,
+    dli_saddr: MutVoidPtr,
+}
+unsafe impl SafeRead for Dl_info {}
 
 fn is_known_library(path: &str) -> bool {
     crate::dyld::DYLIB_LIST
@@ -68,6 +88,39 @@ fn dlsym(env: &mut Environment, handle: MutVoidPtr, symbol: ConstPtr<u8>) -> Mut
     }
 }
 
+/// `int dladdr(const void *addr, Dl_info *info)`
+///
+/// Real `dladdr()` looks up which loaded image (and nearest exported symbol)
+/// a given address belongs to. touchHLE's dyld only supports forward lookup
+/// (name -> address), not reverse (address -> name), and building a full
+/// reverse index just for this would be disproportionate. However, the
+/// callers that use `dladdr()` in practice are crash reporters / self-
+/// diagnostics (e.g. OpenFeint), which only need it to *not crash* and to
+/// return a success/failure flag; the individual fields are best-effort.
+///
+/// Per the contract, on success we return non-zero and fill `info`. We set
+/// the symbol fields to NULL (documented behaviour when no symbol can be
+/// resolved for the address) and leave the image fields NULL as well, since
+/// we don't track per-image base addresses here. This is a valid, non-
+/// crashing response that satisfies the common "is this address in a known
+/// image?" check without fabricating misleading data.
+fn dladdr(env: &mut Environment, _addr: ConstVoidPtr, info: MutPtr<Dl_info>) -> i32 {
+    if !info.is_null() {
+        env.mem.write(
+            info,
+            Dl_info {
+                dli_fname: Ptr::null(),
+                dli_fbase: Ptr::null(),
+                dli_sname: Ptr::null(),
+                dli_saddr: Ptr::null(),
+            },
+        );
+    }
+    // Non-zero = success (note: dladdr's success convention is the opposite of
+    // most libc functions).
+    1
+}
+
 fn dlclose(env: &mut Environment, handle: MutVoidPtr) -> i32 {
     assert!(
         handle == RTLD_DEFAULT || is_known_library(env.mem.cstr_at_utf8(handle.cast()).unwrap())
@@ -78,5 +131,6 @@ fn dlclose(env: &mut Environment, handle: MutVoidPtr) -> i32 {
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(dlopen(_, _)),
     export_c_func!(dlsym(_, _)),
+    export_c_func!(dladdr(_, _)),
     export_c_func!(dlclose(_)),
 ];
