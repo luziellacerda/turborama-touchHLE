@@ -406,6 +406,12 @@ pub const CLASSES: ClassExports = objc_classes! {
     file_attributes_common(env, guest_path)
 }
 
+// Deprecated predecessor of attributesOfFileSystemForPath:error:.
+- (id)fileSystemAttributesAtPath:(id)path { // NSString*
+    let null_error: MutPtr<id> = Ptr::null();
+    msg![env; this attributesOfFileSystemForPath:path error:null_error]
+}
+
 - (id)attributesOfFileSystemForPath:(id)_path
                               error:(MutPtr<id>)error {
     // TODO: other attributes
