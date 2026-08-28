@@ -205,6 +205,22 @@ pub fn CGContextSetRGBStrokeColor(
         .rgb_stroke_color = color;
 }
 
+fn CGContextSetShadow(
+    _env: &mut Environment,
+    context: CGContextRef,
+    offset: CGSize,
+    blur: CGFloat,
+) {
+    // Shadows are purely decorative; skipping them costs some visual polish but
+    // leaves the drawing itself correct.
+    log!(
+        "TODO: CGContextSetShadow({:?}, {:?}, {})",
+        context,
+        offset,
+        blur
+    );
+}
+
 fn CGContextSetShadowWithColor(
     _env: &mut Environment,
     context: CGContextRef,
@@ -747,6 +763,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextSetAllowsAntialiasing(_, _)),
     export_c_func!(CGContextSetShouldAntialias(_, _)),
     export_c_func!(CGContextSetShouldSmoothFonts(_, _)),
+    export_c_func!(CGContextSetShadow(_, _, _)),
     export_c_func!(CGContextSetFont(_, _)),
     export_c_func!(CGContextSetFontSize(_, _)),
     export_c_func!(CGContextSetTextDrawingMode(_, _)),
