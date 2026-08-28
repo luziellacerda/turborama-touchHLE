@@ -38,6 +38,10 @@ struct UIButtonContentHostObject {
     title: id,
     /// `UIColor*`
     title_color: id,
+    /// `UIImage*`
+    image: id,
+    /// `UIImage*`
+    background_image: id,
 }
 impl HostObject for UIButtonContentHostObject {}
 
@@ -215,6 +219,18 @@ pub const CLASSES: ClassExports = objc_classes! {
     if title_color != nil {
         log_dbg!("UIButton initWithCoder: title_color {}", to_rust_string(env, title_color));
         () = msg![env; this setTitleColor:title_color forState:UIControlStateNormal];
+    }
+
+    let image: id = msg![env; button_content image];
+    if image != nil {
+        log_dbg!("UIButton initWithCoder: image {:?}", image);
+        () = msg![env; this setImage:image forState:UIControlStateNormal];
+    }
+
+    let background_image: id = msg![env; button_content backgroundImage];
+    if background_image != nil {
+        log_dbg!("UIButton initWithCoder: background image {:?}", background_image);
+        () = msg![env; this setBackgroundImage:background_image forState:UIControlStateNormal];
     }
 
     // TODO: decode other properties
@@ -456,13 +472,27 @@ pub const CLASSES: ClassExports = objc_classes! {
     let title_color: id = msg![env; coder decodeObjectForKey:title_color_key];
     log_dbg!("UIButtonContent: UITitleColor -> {:?}", title_color);
 
+    // Buttons in nibs commonly carry images rather than a title; without these
+    // they decode to nothing and the button draws blank.
+    let image_key = get_static_str(env, "UIImage");
+    let image: id = msg![env; coder decodeObjectForKey:image_key];
+    log_dbg!("UIButtonContent: UIImage -> {:?}", image);
+
+    let background_image_key = get_static_str(env, "UIBackgroundImage");
+    let background_image: id = msg![env; coder decodeObjectForKey:background_image_key];
+    log_dbg!("UIButtonContent: UIBackgroundImage -> {:?}", background_image);
+
     // TODO: decode other properties
 
     retain(env, title);
     retain(env, title_color);
+    retain(env, image);
+    retain(env, background_image);
     let host_obj = env.objc.borrow_mut::<UIButtonContentHostObject>(this);
     host_obj.title = title;
     host_obj.title_color = title_color;
+    host_obj.image = image;
+    host_obj.background_image = background_image;
 
     this
 }
@@ -472,6 +502,12 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (id)titleColor {
     env.objc.borrow::<UIButtonContentHostObject>(this).title_color
+}
+- (id)image {
+    env.objc.borrow::<UIButtonContentHostObject>(this).image
+}
+- (id)backgroundImage {
+    env.objc.borrow::<UIButtonContentHostObject>(this).background_image
 }
 
 - (id)description {
@@ -487,10 +523,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())dealloc {
     let &UIButtonContentHostObject {
         title,
-        title_color
+        title_color,
+        image,
+        background_image,
     } = env.objc.borrow(this);
     release(env, title);
     release(env, title_color);
+    release(env, image);
+    release(env, background_image);
 
     env.objc.dealloc_object(this, &mut env.mem)
 }
