@@ -301,7 +301,7 @@ fn fgetc(env: &mut Environment, file_ptr: MutPtr<FILE>) -> i32 {
 
     let buffer = env.mem.alloc(1);
 
-    match posix_io::read(env, fd, buffer, 1) {
+    let res = match posix_io::read(env, fd, buffer, 1) {
         -1 => EOF,
         bytes_read => {
             let bytes_read: GuestUSize = bytes_read.try_into().unwrap();
@@ -312,7 +312,11 @@ fn fgetc(env: &mut Environment, file_ptr: MutPtr<FILE>) -> i32 {
                 env.mem.read(buf) as i32
             }
         }
-    }
+    };
+    // The scratch buffer used to be leaked on every call, which adds up quickly
+    // for apps that read files byte by byte.
+    env.mem.free(buffer);
+    res
 }
 
 fn getc(env: &mut Environment, file_ptr: MutPtr<FILE>) -> i32 {
