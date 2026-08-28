@@ -18,7 +18,7 @@ use super::cg_image::{
     self, kCGBitmapAlphaInfoMask, kCGBitmapByteOrderMask, kCGImageAlphaFirst, kCGImageAlphaLast,
     kCGImageAlphaNone, kCGImageAlphaNoneSkipFirst, kCGImageAlphaNoneSkipLast, kCGImageAlphaOnly,
     kCGImageAlphaPremultipliedFirst, kCGImageAlphaPremultipliedLast, kCGImageByteOrder32Big,
-    kCGImageByteOrderDefault, CGBitmapInfo, CGImageAlphaInfo, CGImageRef,
+    kCGImageByteOrder32Little, kCGImageByteOrderDefault, CGBitmapInfo, CGImageAlphaInfo, CGImageRef,
 };
 use super::{CGFloat, CGPoint, CGRect};
 use crate::dyld::{export_c_func, FunctionExports};
@@ -54,10 +54,20 @@ pub fn CGBitmapContextCreate(
     let color_space = env.objc.borrow::<CGColorSpaceHostObject>(color_space).name;
 
     let component_count = match color_space {
-        kCGColorSpaceGenericRGB => components_for_rgb(bitmap_info).unwrap(),
-        kCGColorSpaceGenericGray => components_for_gray(bitmap_info).unwrap(),
+        kCGColorSpaceGenericRGB => components_for_rgb(bitmap_info),
+        kCGColorSpaceGenericGray => components_for_gray(bitmap_info),
         _ => unimplemented!("support other color spaces"),
-    };
+    }
+    .unwrap_or_else(|()| {
+        panic!(
+            "CGBitmapContextCreate: unsupported bitmap_info {:#x} \
+             (byte_order={:#x}, alpha_info={:#x}) for color space {:?}",
+            bitmap_info,
+            bitmap_info & kCGBitmapByteOrderMask,
+            bitmap_info & kCGBitmapAlphaInfoMask,
+            color_space,
+        )
+    });
 
     let (data, data_is_owned, bytes_per_row) = if data.is_null() {
         let bytes_per_row = if bytes_per_row == 0 {
@@ -159,7 +169,13 @@ pub fn CGBitmapContextCreateImage(env: &mut Environment, context: CGContextRef) 
 
 fn components_for_rgb(bitmap_info: CGBitmapInfo) -> Result<GuestUSize, ()> {
     let byte_order = bitmap_info & kCGBitmapByteOrderMask;
-    if byte_order != kCGImageByteOrderDefault && byte_order != kCGImageByteOrder32Big {
+    // Byte order doesn't change how many components a pixel has, only their
+    // in-memory order, so all the byte orders touchHLE knows about are fine to
+    // accept here. 32Little in particular is extremely common on iOS/ARM.
+    if byte_order != kCGImageByteOrderDefault
+        && byte_order != kCGImageByteOrder32Big
+        && byte_order != kCGImageByteOrder32Little
+    {
         return Err(()); // TODO: handle other byte orders
     }
 
@@ -182,7 +198,10 @@ fn components_for_rgb(bitmap_info: CGBitmapInfo) -> Result<GuestUSize, ()> {
 
 fn components_for_gray(bitmap_info: CGBitmapInfo) -> Result<GuestUSize, ()> {
     let byte_order = bitmap_info & kCGBitmapByteOrderMask;
-    if byte_order != kCGImageByteOrderDefault && byte_order != kCGImageByteOrder32Big {
+    if byte_order != kCGImageByteOrderDefault
+        && byte_order != kCGImageByteOrder32Big
+        && byte_order != kCGImageByteOrder32Little
+    {
         return Err(()); // TODO: handle other byte orders
     }
 
