@@ -21,6 +21,7 @@ pub mod cf_array;
 pub mod cf_bundle;
 pub mod cf_character_set;
 pub mod cf_host;
+pub mod cf_stream;
 pub mod cf_data;
 pub mod cf_dictionary;
 pub mod cf_locale;
@@ -58,6 +59,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         cf_bundle::FUNCTIONS,
         cf_character_set::FUNCTIONS,
         cf_host::FUNCTIONS,
+        cf_stream::FUNCTIONS,
         cf_socket::FUNCTIONS,
         cf_data::FUNCTIONS,
         cf_locale::FUNCTIONS,
