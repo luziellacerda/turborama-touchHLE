@@ -237,6 +237,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 /// For use by `CADisplayLink`
 pub fn set_time_interval(env: &mut Environment, timer: id, interval: NSTimeInterval) {
+    // A NaN or non-finite interval (e.g. from a division by a zero frame rate
+    // in game code) would panic in Duration::from_secs_f64, so clamp it to a
+    // small positive value.
+    let interval = if interval.is_finite() {
+        interval.max(0.0001)
+    } else {
+        0.0001
+    };
     let host_object = env.objc.borrow_mut::<NSTimerHostObject>(timer);
     host_object.ns_interval = interval;
     host_object.rust_interval = Duration::from_secs_f64(interval);

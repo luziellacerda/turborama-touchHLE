@@ -130,6 +130,12 @@ pub(super) fn handle_accelerometer(env: &mut Environment) -> Option<Instant> {
     let delegate = state.delegate?;
 
     let ns_interval = state.update_interval.unwrap_or(DEFAULT_UPDATE_INTERVAL);
+    // A NaN or non-finite interval would panic in Duration::from_secs_f64.
+    let ns_interval = if ns_interval.is_finite() && ns_interval > 0.0 {
+        ns_interval
+    } else {
+        DEFAULT_UPDATE_INTERVAL
+    };
     let rust_interval = Duration::from_secs_f64(ns_interval);
 
     let now = Instant::now();
