@@ -211,6 +211,23 @@ pub trait GLES {
         pointer: *const GLvoid,
     );
     unsafe fn DrawTexiOES(&mut self, x: GLint, y: GLint, z: GLint, width: GLint, height: GLint);
+    // GL_OES_matrix_palette
+    unsafe fn CurrentPaletteMatrixOES(&mut self, index: GLuint);
+    unsafe fn LoadPaletteFromModelViewMatrixOES(&mut self);
+    unsafe fn MatrixIndexPointerOES(
+        &mut self,
+        size: GLint,
+        type_: GLenum,
+        stride: GLsizei,
+        pointer: *const GLvoid,
+    );
+    unsafe fn WeightPointerOES(
+        &mut self,
+        size: GLint,
+        type_: GLenum,
+        stride: GLsizei,
+        pointer: *const GLvoid,
+    );
 
     // Drawing
     unsafe fn DrawArrays(&mut self, mode: GLenum, first: GLint, count: GLsizei);

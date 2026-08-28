@@ -1348,6 +1348,30 @@ impl GLES for GLES1OnGL2<'_> {
         // where native GLES 1.1 is unavailable, so just warn.
         log!("Warning: DrawTexiOES ignored (unsupported on the GL 2.1 backend)");
     }
+    unsafe fn CurrentPaletteMatrixOES(&mut self, _index: GLuint) {
+        log!("Warning: CurrentPaletteMatrixOES ignored (unsupported on the GL 2.1 backend)");
+    }
+    unsafe fn LoadPaletteFromModelViewMatrixOES(&mut self) {
+        log!("Warning: LoadPaletteFromModelViewMatrixOES ignored (unsupported on the GL 2.1 backend)");
+    }
+    unsafe fn MatrixIndexPointerOES(
+        &mut self,
+        _size: GLint,
+        _type_: GLenum,
+        _stride: GLsizei,
+        _pointer: *const GLvoid,
+    ) {
+        log!("Warning: MatrixIndexPointerOES ignored (unsupported on the GL 2.1 backend)");
+    }
+    unsafe fn WeightPointerOES(
+        &mut self,
+        _size: GLint,
+        _type_: GLenum,
+        _stride: GLsizei,
+        _pointer: *const GLvoid,
+    ) {
+        log!("Warning: WeightPointerOES ignored (unsupported on the GL 2.1 backend)");
+    }
 
     // Drawing
     unsafe fn DrawArrays(&mut self, mode: GLenum, first: GLint, count: GLsizei) {

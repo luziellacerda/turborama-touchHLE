@@ -403,6 +403,30 @@ impl GLES for GLES1Native<'_> {
     unsafe fn DrawTexiOES(&mut self, x: GLint, y: GLint, z: GLint, width: GLint, height: GLint) {
         gles11::DrawTexiOES(x, y, z, width, height)
     }
+    unsafe fn CurrentPaletteMatrixOES(&mut self, index: GLuint) {
+        gles11::CurrentPaletteMatrixOES(index)
+    }
+    unsafe fn LoadPaletteFromModelViewMatrixOES(&mut self) {
+        gles11::LoadPaletteFromModelViewMatrixOES()
+    }
+    unsafe fn MatrixIndexPointerOES(
+        &mut self,
+        size: GLint,
+        type_: GLenum,
+        stride: GLsizei,
+        pointer: *const GLvoid,
+    ) {
+        gles11::MatrixIndexPointerOES(size, type_, stride, pointer)
+    }
+    unsafe fn WeightPointerOES(
+        &mut self,
+        size: GLint,
+        type_: GLenum,
+        stride: GLsizei,
+        pointer: *const GLvoid,
+    ) {
+        gles11::WeightPointerOES(size, type_, stride, pointer)
+    }
 
     // Drawing
     unsafe fn DrawArrays(&mut self, mode: GLenum, first: GLint, count: GLsizei) {
