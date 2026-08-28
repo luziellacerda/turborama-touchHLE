@@ -115,14 +115,12 @@ fn _touchHLE_check_file_object_lock(env: &mut Environment, file_ptr: MutPtr<FILE
 #[allow(non_camel_case_types)]
 type fpos_t = off_t;
 
-fn fopen(env: &mut Environment, filename: ConstPtr<u8>, mode: ConstPtr<u8>) -> MutPtr<FILE> {
+fn parse_fopen_mode(mode: &[u8]) -> i32 {
     // Some testing on macOS suggests Apple's implementation will just ignore
     // flags it doesn't know about, and unfortunately real-world apps seem to
     // rely on this, e.g. using "wt" to mean open for writing in text mode,
     // even though that's not a real flag. The one thing that is required is for
     // a known basic mode (r/w/a) to come first.
-
-    let mode = env.mem.cstr_at(mode);
     let [basic_mode @ (b'r' | b'w' | b'a'), flags @ ..] = mode else {
         panic!(
             "Unexpected or missing fopen() mode first character: {:?}",
@@ -141,7 +139,7 @@ fn fopen(env: &mut Environment, filename: ConstPtr<u8>, mode: ConstPtr<u8>) -> M
         }
     }
 
-    let flags = match (basic_mode, plus) {
+    match (basic_mode, plus) {
         (b'r', false) => O_RDONLY,
         (b'r', true) => O_RDWR,
         (b'w', false) => O_WRONLY | O_CREAT | O_TRUNC,
@@ -149,7 +147,12 @@ fn fopen(env: &mut Environment, filename: ConstPtr<u8>, mode: ConstPtr<u8>) -> M
         (b'a', false) => O_WRONLY | O_APPEND | O_CREAT,
         (b'a', true) => O_RDWR | O_APPEND | O_CREAT,
         _ => unreachable!(),
-    };
+    }
+}
+
+fn fopen(env: &mut Environment, filename: ConstPtr<u8>, mode: ConstPtr<u8>) -> MutPtr<FILE> {
+    let mode = env.mem.cstr_at(mode);
+    let flags = parse_fopen_mode(mode);
 
     match posix_io::open_direct(env, filename, flags) {
         -1 => Ptr::null(),
@@ -165,6 +168,57 @@ fn fopen(env: &mut Environment, filename: ConstPtr<u8>, mode: ConstPtr<u8>) -> M
                 },
             );
             res
+        }
+    }
+}
+
+/// `freopen()` reopens a stream, redirecting it to a new file (commonly used to
+/// point stdout/stderr at a log file). It closes the old descriptor and reuses
+/// the same `FILE` pointer for the newly opened file.
+fn freopen(
+    env: &mut Environment,
+    filename: ConstPtr<u8>,
+    mode: ConstPtr<u8>,
+    file_ptr: MutPtr<FILE>,
+) -> MutPtr<FILE> {
+    if file_ptr.is_null() {
+        return Ptr::null();
+    }
+
+    let mode_bytes = env.mem.cstr_at(mode);
+    let flags = parse_fopen_mode(mode_bytes);
+
+    // A NULL filename means "change the mode of the existing stream". touchHLE
+    // can't change flags on an open fd meaningfully here, so just keep it.
+    if filename.is_null() {
+        return file_ptr;
+    }
+
+    // Close the old descriptor (unless it's a standard stream, which we keep).
+    let FILE { fd: old_fd } = env.mem.read(file_ptr);
+    if !matches!(old_fd, STDIN_FILENO | STDOUT_FILENO | STDERR_FILENO) {
+        posix_io::close(env, old_fd);
+    }
+
+    match posix_io::open_direct(env, filename, flags) {
+        -1 => {
+            // On failure the stream is closed and NULL is returned.
+            State::get_mut(env).file_streams.remove(&file_ptr);
+            Ptr::null()
+        }
+        new_fd => {
+            env.mem.write(file_ptr, FILE { fd: new_fd });
+            // Ensure a host object exists for this stream (it will already for a
+            // normally-opened stream, but standard streams may be lazily set up).
+            State::get_mut(env)
+                .file_streams
+                .entry(file_ptr)
+                .or_insert_with(|| FILEHostObject {
+                    pushbacks: Vec::new(),
+                    lock_count: 0,
+                    owning_thread: None,
+                });
+            file_ptr
         }
     }
 }
@@ -713,6 +767,7 @@ pub const CONSTANTS: ConstantExports = &[
 pub const FUNCTIONS: FunctionExports = &[
     // Standard C functions
     export_c_func!(fopen(_, _)),
+    export_c_func!(freopen(_, _, _)),
     export_c_func!(fread(_, _, _, _)),
     export_c_func!(fgetc(_)),
     export_c_func!(getc(_)),
