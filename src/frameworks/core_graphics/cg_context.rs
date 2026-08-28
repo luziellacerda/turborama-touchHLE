@@ -329,11 +329,28 @@ pub fn CGContextClearRect(env: &mut Environment, context: CGContextRef, rect: CG
 
 pub(super) fn CGContextClipToRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
     let host_obj = env.objc.borrow::<CGContextHostObject>(context);
-    // TODO: support clipping under a non-identity transform. Since the
-    // clip is stored in device space (see CGContextHostObject::clip_rect),
-    // a rotated/skewed transform would turn the rect into a non-rectangular
-    // shape in device space, which isn't representable here.
-    assert!(host_obj.transform.is_identity());
+
+    // The clip is stored in device space (see CGContextHostObject::clip_rect),
+    // so the rect has to be mapped through the current transform first.
+    //
+    // Under translation and scaling a rectangle stays a rectangle, so this is
+    // exact. Rotation and skew turn it into a quadrilateral that cannot be
+    // represented here; apply_to_rect() then yields the bounding box, which
+    // clips away less than it should. That is a far better outcome than
+    // aborting, and apps combining a rotated transform with a rect clip are
+    // rare.
+    let transform = host_obj.transform;
+    let rect = if transform.is_identity() {
+        rect
+    } else {
+        if transform.b != 0.0 || transform.c != 0.0 {
+            log!(
+                "TODO: CGContextClipToRect() under a rotated/skewed transform, \
+                 clipping to the bounding box instead"
+            );
+        }
+        transform.apply_to_rect(rect)
+    };
 
     // CGContextClipToRect() intersects with whatever clip is already in
     // effect; it doesn't replace it.
