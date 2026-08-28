@@ -386,6 +386,70 @@ pub(super) fn fflush(env: &mut Environment, fd: FileDescriptor) -> i32 {
     }
 }
 
+/// `struct iovec` from <sys/uio.h>, used by `writev`/`readv`.
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy)]
+#[repr(C, packed)]
+struct iovec {
+    iov_base: MutVoidPtr,
+    iov_len: GuestUSize,
+}
+unsafe impl SafeRead for iovec {}
+
+/// `ssize_t writev(int fd, const struct iovec *iov, int iovcnt)`
+///
+/// Scatter-gather write: writes each buffer in turn, which is equivalent to
+/// calling `write` for each one.
+fn writev(
+    env: &mut Environment,
+    fd: FileDescriptor,
+    iov: ConstPtr<iovec>,
+    iovcnt: i32,
+) -> GuestISize {
+    let mut total: GuestISize = 0;
+    for i in 0..iovcnt.max(0) {
+        let vec = env.mem.read(iov + i as GuestUSize);
+        let base = vec.iov_base;
+        let len = vec.iov_len;
+        if len == 0 {
+            continue;
+        }
+        let written = write(env, fd, base.cast_const(), len);
+        if written < 0 {
+            // Return the error only if nothing was written at all, as POSIX
+            // requires a partial write to be reported as a success.
+            return if total == 0 { written } else { total };
+        }
+        total += written;
+        if (written as GuestUSize) < len {
+            break; // partial write, stop here
+        }
+    }
+    total
+}
+
+/// `ssize_t readv(int fd, const struct iovec *iov, int iovcnt)`
+fn readv(env: &mut Environment, fd: FileDescriptor, iov: ConstPtr<iovec>, iovcnt: i32) -> GuestISize {
+    let mut total: GuestISize = 0;
+    for i in 0..iovcnt.max(0) {
+        let vec = env.mem.read(iov + i as GuestUSize);
+        let base = vec.iov_base;
+        let len = vec.iov_len;
+        if len == 0 {
+            continue;
+        }
+        let bytes_read = read(env, fd, base, len);
+        if bytes_read < 0 {
+            return if total == 0 { bytes_read } else { total };
+        }
+        total += bytes_read;
+        if (bytes_read as GuestUSize) < len {
+            break; // end of file or partial read
+        }
+    }
+    total
+}
+
 pub fn write(
     env: &mut Environment,
     fd: FileDescriptor,
@@ -935,6 +999,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(read(_, _, _)),
     export_c_func!(pread(_, _, _, _)),
     export_c_func!(write(_, _, _)),
+    export_c_func!(writev(_, _, _)),
+    export_c_func!(readv(_, _, _)),
     export_c_func!(pwrite(_, _, _, _)),
     export_c_func!(lseek(_, _, _)),
     export_c_func!(close(_)),
