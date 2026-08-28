@@ -1772,11 +1772,19 @@ pub fn register_constant_strings(bin: &MachO, mem: &mut Mem, objc: &mut ObjC) {
         // 0x7d0.
         // See https://lists.llvm.org/pipermail/cfe-dev/2008-August/002518.html
         let (host_object, class_name) = if flags == 0x7C8 {
-            // ASCII
-            let decoded = std::str::from_utf8(mem.bytes_at(bytes, length)).unwrap();
+            // "8-bit" (the flag is historically named for ASCII, but compilers
+            // also emit Latin-1 here, i.e. bytes >= 0x80, so we can't assume
+            // strict UTF-8/ASCII). Decode as Latin-1: each byte maps directly to
+            // the Unicode code point of the same value. This is lossless and
+            // matches ASCII for bytes < 0x80.
+            let decoded: String = mem
+                .bytes_at(bytes, length)
+                .iter()
+                .map(|&b| b as char)
+                .collect();
 
             (
-                StringHostObject::Utf8(Cow::Owned(String::from(decoded))),
+                StringHostObject::Utf8(Cow::Owned(decoded)),
                 "_touchHLE_NSString_CFConstantString_UTF8",
             )
         } else if flags == 0x7D0 {
