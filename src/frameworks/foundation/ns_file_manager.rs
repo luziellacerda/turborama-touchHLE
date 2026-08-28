@@ -60,7 +60,9 @@ fn NSSearchPathForDirectoriesInDomains(
     expand_tilde: bool,
 ) -> id {
     // TODO: other cases not implemented
-    assert!(domain_mask == NSUserDomainMask);
+    // Apps sometimes pass a combined mask (e.g. user|local|network); touchHLE
+    // only has the sandboxed user domain, so accept any mask that includes it.
+    assert!(domain_mask & NSUserDomainMask != 0);
     assert!(expand_tilde);
 
     let dir = match directory {
