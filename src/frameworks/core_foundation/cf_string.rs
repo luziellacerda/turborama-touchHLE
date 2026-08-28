@@ -11,7 +11,8 @@
 use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
 use super::cf_dictionary::CFDictionaryRef;
 use super::cf_locale::CFLocaleRef;
-use super::{kCFNotFound, CFComparisonResult, CFIndex, CFOptionFlags, CFRange};
+use super::cf_type::type_id_for_class;
+use super::{kCFNotFound, CFComparisonResult, CFIndex, CFOptionFlags, CFRange, CFTypeID};
 use crate::abi::{DotDotDot, VaList};
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::foundation::{ns_string, unichar, NSNotFound, NSRange, NSUInteger};
@@ -471,6 +472,12 @@ fn CFStringNormalize(
     assert!(str.is_ascii()); // TODO
 }
 
+fn CFStringGetTypeID(env: &mut Environment) -> CFTypeID {
+    // Must match what CFGetTypeID returns for a CFString, which normalizes to
+    // the NSString base class pointer.
+    type_id_for_class(env, "NSString")
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringAppend(_, _)),
     export_c_func!(CFStringAppendCString(_, _, _)),
@@ -506,4 +513,5 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringCreateWithPascalString(_, _, _)),
     export_c_func!(CFStringGetPascalString(_, _, _, _)),
     export_c_func!(CFStringNormalize(_, _)),
+    export_c_func!(CFStringGetTypeID()),
 ];
