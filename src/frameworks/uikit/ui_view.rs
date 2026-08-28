@@ -501,6 +501,32 @@ pub const CLASSES: ClassExports = objc_classes! {
         return;
     }
 
+    // Objects coming from a nib graph aren't always real UIViews. Some are
+    // unreplaced UIProxyObject placeholders; others are entirely uninitialized
+    // (their isa is nil), so any objc_msgSend to them - even isKindOfClass: -
+    // would crash. Guard on the raw isa first, then confirm it's a UIView.
+    let isa = ObjC::read_isa(view, &env.mem);
+    if isa == nil {
+        log!(
+            "Warning: ignoring [(UIView*){:?} addSubview:{:?}] because the argument has a nil isa (uninitialized object).",
+            this,
+            view
+        );
+        return;
+    }
+    let is_view: bool = {
+        let ui_view_class = env.objc.get_known_class("UIView", &mut env.mem);
+        msg![env; view isKindOfClass:ui_view_class]
+    };
+    if !is_view {
+        log!(
+            "Warning: ignoring [(UIView*){:?} addSubview:{:?}] because the argument is not a UIView.",
+            this,
+            view
+        );
+        return;
+    }
+
     if env.objc.borrow::<UIViewHostObject>(view).superview == this {
         () = msg![env; this bringSubviewToFront:view];
     } else {
