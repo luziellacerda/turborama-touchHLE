@@ -6,7 +6,7 @@
 //! The `NSScanner` class.
 
 use crate::frameworks::foundation::ns_string::{from_u16_vec, to_rust_string};
-use crate::frameworks::foundation::{unichar, NSNotFound, NSRange, NSUInteger};
+use crate::frameworks::foundation::{unichar, NSInteger, NSNotFound, NSRange, NSUInteger};
 use crate::mem::MutPtr;
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
@@ -254,6 +254,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 
     *env.objc.borrow_mut::<NSScannerHostObject>(this) = NSScannerHostObject { to_be_skipped, string, len, pos: pos + cutoff as NSUInteger };
     true
+}
+
+- (bool)scanInteger:(MutPtr<NSInteger>)result {
+    // Identical to scanInt: — NSInteger is 32-bit on this platform.
+    msg![env; this scanInt:(result.cast::<i32>())]
 }
 
 @end
