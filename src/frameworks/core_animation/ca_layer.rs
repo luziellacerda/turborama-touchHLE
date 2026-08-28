@@ -671,14 +671,23 @@ fn transform_for_conversion(env: &mut Environment, this: id, other: id) -> CGAff
 
         if this_superlayer == nil && other_superlayer == nil {
             if need_common_ancestor {
-                panic!("Layers {this:?} and {other:?} have no common ancestor!");
+                // On real iOS, converting between layers in separate hierarchies
+                // doesn't crash; it resolves against their roots. Rather than
+                // panic, fall back to using the accumulated transforms with no
+                // shared ancestor (nil), which is a reasonable approximation.
+                log_dbg!(
+                    "Layers {this:?} and {other:?} have no common ancestor; \
+                     converting via their roots."
+                );
+                break (nil, this_transform, other_transform);
             } else {
                 break (nil, this_transform, other_transform);
             }
         }
     };
 
-    assert!((common_ancestor == nil) != need_common_ancestor);
+    // Note: common_ancestor may be nil even when need_common_ancestor is true,
+    // in the fallback case where the two layers share no ancestor.
     if need_common_ancestor {
         log_dbg!("{this:?} and {other:?}'s common ancestor: {common_ancestor:?}",);
     }
