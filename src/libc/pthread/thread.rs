@@ -163,6 +163,18 @@ fn pthread_attr_setschedpolicy(
     );
     0 // success
 }
+
+// On Darwin/iOS these return the same priority bounds for every standard
+// scheduling policy (SCHED_OTHER, SCHED_FIFO, SCHED_RR): max 47, min 15.
+// touchHLE doesn't actually honor thread priorities, but apps query these to
+// compute an intermediate priority to pass to pthread_attr_setschedparam, so
+// returning the real Darwin values keeps that arithmetic sane.
+fn sched_get_priority_max(_env: &mut Environment, _policy: i32) -> i32 {
+    47
+}
+fn sched_get_priority_min(_env: &mut Environment, _policy: i32) -> i32 {
+    15
+}
 fn pthread_attr_setschedparam(
     env: &mut Environment,
     attr: MutPtr<pthread_attr_t>,
@@ -417,6 +429,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(pthread_attr_setstacksize(_, _)),
     export_c_func!(pthread_attr_setinheritsched(_, _)),
     export_c_func!(pthread_attr_setschedpolicy(_, _)),
+    export_c_func!(sched_get_priority_max(_)),
+    export_c_func!(sched_get_priority_min(_)),
     export_c_func!(pthread_attr_setschedparam(_, _)),
     export_c_func!(pthread_attr_destroy(_)),
     export_c_func!(pthread_create(_, _, _, _)),
