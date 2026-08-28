@@ -7,6 +7,7 @@
 
 use super::{UIControlState, UIControlStateNormal};
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect};
+use crate::frameworks::uikit::ui_geometry::UIEdgeInsets;
 use crate::frameworks::foundation::ns_string::{from_rust_string, get_static_str, to_rust_string};
 use crate::frameworks::foundation::NSInteger;
 use crate::frameworks::uikit::ui_font::UITextAlignmentCenter;
@@ -263,6 +264,14 @@ pub const CLASSES: ClassExports = objc_classes! {
     // image view a non-zero frame so its image is actually visible.
     () = msg![env; image_view setFrame:bounds];
 
+}
+
+- (())setTitleEdgeInsets:(UIEdgeInsets)_insets {
+    // touchHLE doesn't apply edge insets to the button's title layout.
+}
+- (())setContentEdgeInsets:(UIEdgeInsets)_insets {
+}
+- (())setImageEdgeInsets:(UIEdgeInsets)_insets {
 }
 
 - (UIButtonType)buttonType {
