@@ -137,7 +137,17 @@ fn CFStringCreateWithBytes(
     is_external: bool,
 ) -> CFStringRef {
     assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
-    assert!(!is_external); // TODO
+    // is_external (isExternalRepresentation) indicates the bytes may begin with
+    // a BOM that determines byte order. This only matters for UTF-16/UTF-32; for
+    // encodings like UTF-8 it makes no difference, and NSString's initWithBytes
+    // handles the bytes correctly either way. Rather than reject it, ignore it.
+    // TODO: honor the BOM for UTF-16/UTF-32 external representations.
+    if is_external {
+        log!(
+            "Warning: CFStringCreateWithBytes with isExternalRepresentation=true; \
+             ignoring (only affects UTF-16/UTF-32 byte order)"
+        );
+    }
     let encoding = CFStringConvertEncodingToNSStringEncoding(env, encoding);
     let length: NSUInteger = num_bytes.try_into().unwrap();
     let ns_string: id = msg_class![env; NSString alloc];
