@@ -166,8 +166,12 @@ fn AudioServicesPlaySystemSound(env: &mut Environment, sys_sound_id: SystemSound
                 );
             }
         } else {
-            panic!(
-                "Incorrect/unsupported system sound {:x} played!",
+            // The sound was never registered: the app may be using a system
+            // sound touchHLE doesn't provide, or an ID left over from a failed
+            // AudioServicesCreateSystemSoundID(). Silence is a much better
+            // answer than taking the whole emulator down over one sound effect.
+            log!(
+                "TODO: unsupported system sound {:#x} played, ignoring",
                 sys_sound_id
             );
         }
