@@ -9,7 +9,7 @@ use crate::abi::{extend_stack_for_args, write_next_arg, GuestArg};
 use crate::cpu::Cpu;
 use crate::frameworks::foundation::{NSInteger, NSUInteger};
 use crate::libc::string::strdup;
-use crate::mem::{ConstPtr, MutPtr, MutVoidPtr};
+use crate::mem::{ConstPtr, MutPtr, MutVoidPtr, Ptr};
 use crate::msg;
 use crate::objc::{
     autorelease, id, nil, objc_classes, objc_msgSend, release, retain, ClassExports, HostObject,
@@ -179,11 +179,18 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())invoke {
-    // Safeguard: all arguments must be set (except first two)
+    // Arguments that were never set are treated as zero/nil (NSInvocation
+    // zero-initialises its argument storage).
     let arguments: &Vec<Option<MutVoidPtr>> = env.objc.borrow::<NSInvocationHostObject>(this).arguments.as_ref();
     let set_count = arguments.iter().flatten().count();
     let all_count = arguments.len();
-    assert_eq!(set_count + 2, all_count);
+    if set_count + 2 != all_count {
+        log_dbg!(
+            "[NSInvocation invoke]: {} of {} arguments set; treating the rest as zero/nil",
+            set_count,
+            all_count.saturating_sub(2)
+        );
+    }
 
     let sig = env.objc.borrow::<NSInvocationHostObject>(this).sig;
     let ret_type: ConstPtr<u8> = msg![env; sig methodReturnType];
@@ -233,8 +240,22 @@ pub const CLASSES: ClassExports = objc_classes! {
             write_next_arg::<SEL>(&mut reg_offset, regs, &mut env.mem, selector);
             continue;
         }
-        let arg_slot = arguments[i].unwrap();
         let arg_type = argument_types[i].as_str();
+        let Some(arg_slot) = arguments[i] else {
+            // Unset argument: pass zero/nil of the appropriate width.
+            let regs = env.cpu.regs_mut();
+            match arg_type {
+                "@" => write_next_arg::<id>(&mut reg_offset, regs, &mut env.mem, nil),
+                "f" => write_next_arg::<f32>(&mut reg_offset, regs, &mut env.mem, 0.0),
+                "c" => write_next_arg::<u8>(&mut reg_offset, regs, &mut env.mem, 0),
+                "*" => write_next_arg::<MutPtr<u8>>(&mut reg_offset, regs, &mut env.mem, Ptr::null()),
+                _ if arg_type.starts_with('^') => {
+                    write_next_arg::<MutVoidPtr>(&mut reg_offset, regs, &mut env.mem, Ptr::null())
+                }
+                _ => unimplemented!("write_next_arg (unset) for {arg_type}"),
+            }
+            continue;
+        };
         // TODO: refactor and simplify
         match arg_type {
             "@" => {
