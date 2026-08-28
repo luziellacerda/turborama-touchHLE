@@ -566,9 +566,18 @@ fn CGContextShowGlyphsAtPositions(
     }
 }
 
+// CGContextFlush forces any pending drawing to be rendered. For a bitmap
+// context (the only kind touchHLE has), drawing operations write straight into
+// the pixel buffer in memory, so there is no deferred pipeline to flush and
+// this is a no-op.
+fn CGContextFlush(_env: &mut Environment, _context: CGContextRef) {
+    // no-op
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextRetain(_)),
     export_c_func!(CGContextRelease(_)),
+    export_c_func!(CGContextFlush(_)),
     export_c_func!(CGContextSetBlendMode(_, _)),
     export_c_func!(CGContextSetFillColorSpace(_, _)),
     export_c_func!(CGContextSetFillColorWithColor(_, _)),
