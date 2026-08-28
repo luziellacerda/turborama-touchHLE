@@ -37,6 +37,7 @@ pub(super) struct CGBitmapContextData {
     bytes_per_row: GuestUSize,
     color_space: &'static str,
     alpha_info: CGImageAlphaInfo,
+    byte_order: CGBitmapInfo,
 }
 
 pub fn CGBitmapContextCreate(
@@ -93,6 +94,7 @@ pub fn CGBitmapContextCreate(
             bytes_per_row,
             color_space,
             alpha_info: bitmap_info & kCGBitmapAlphaInfoMask,
+            byte_order: bitmap_info & kCGBitmapByteOrderMask,
         }),
         // TODO: is this the correct default?
         rgb_fill_color: (0.0, 0.0, 0.0, 0.0),
@@ -149,18 +151,46 @@ pub fn CGBitmapContextCreateImage(env: &mut Environment, context: CGContextRef) 
         bitmap_data.bits_per_component == 8
             && bitmap_data.bytes_per_row == bitmap_data.width * 4
             && bitmap_data.color_space == kCGColorSpaceGenericRGB
-            && matches!(
-                bitmap_data.alpha_info,
-                kCGImageAlphaNoneSkipLast | kCGImageAlphaPremultipliedLast
-            )
     );
-    let pixels = env
+
+    let mut pixels = env
         .mem
         .bytes_at(
             bitmap_data.data.cast(),
             bitmap_data.bytes_per_row * bitmap_data.height,
         )
         .to_vec();
+
+    // Normalize the pixel data to RGBA big-endian, which is what
+    // Image::from_pixel_vec() expects. Two cases are supported:
+    let is_be_rgbx = matches!(
+        bitmap_data.byte_order,
+        kCGImageByteOrderDefault | kCGImageByteOrder32Big
+    ) && matches!(
+        bitmap_data.alpha_info,
+        kCGImageAlphaNoneSkipLast | kCGImageAlphaPremultipliedLast
+    );
+    let is_le_xrgb = bitmap_data.byte_order == kCGImageByteOrder32Little
+        && matches!(
+            bitmap_data.alpha_info,
+            kCGImageAlphaNoneSkipFirst | kCGImageAlphaPremultipliedFirst
+        );
+    assert!(
+        is_be_rgbx || is_le_xrgb,
+        "unsupported bitmap format: byte_order={:#x}, alpha_info={:#x}",
+        bitmap_data.byte_order,
+        bitmap_data.alpha_info
+    );
+    if is_le_xrgb {
+        // XRGB in 32-bit little endian -> RGBX in 32-bit big endian, matching
+        // the conversion CGImageCreate does for the same format in cg_image.rs.
+        for chunk in pixels.chunks_exact_mut(4) {
+            chunk.swap(0, 2);
+            // Skip-alpha means the alpha byte is undefined; treat as opaque.
+            chunk[3] = 0xFF;
+        }
+    }
+
     cg_image::from_image(
         env,
         Image::from_pixel_vec(pixels, (bitmap_data.width, bitmap_data.height)),
@@ -590,6 +620,7 @@ fn test_iter_transformed_pixels() {
                 bytes_per_row: 3 * width,
                 color_space: "kCGColorSpaceGenericRGB",
                 alpha_info: 0,
+                byte_order: 0,
             },
             rgb_fill_color: (0.0, 0.0, 0.0, 0.0),
             blend_mode: kCGBlendModeNormal,
