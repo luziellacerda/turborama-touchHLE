@@ -12,7 +12,7 @@
 //! crashing, matching the approach taken for `UIToolbar`.
 
 use crate::frameworks::foundation::NSInteger;
-use crate::objc::{id, nil, objc_classes, ClassExports};
+use crate::objc::{id, msg, nil, objc_classes, ClassExports};
 
 pub const CLASSES: ClassExports = objc_classes! {
 
@@ -77,6 +77,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (())setRightBarButtonItem:(id)_item { // UIBarButtonItem*
     log!("TODO: [(UINavigationItem*){:?} setRightBarButtonItem:] (ignored)", this);
+}
+- (())setLeftBarButtonItem:(id)item animated:(bool)_animated { // UIBarButtonItem*
+    () = msg![env; this setLeftBarButtonItem:item];
+}
+- (())setRightBarButtonItem:(id)item animated:(bool)_animated { // UIBarButtonItem*
+    () = msg![env; this setRightBarButtonItem:item];
+}
+- (())setHidesBackButton:(bool)_hides {
 }
 
 @end
