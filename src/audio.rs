@@ -52,6 +52,17 @@ pub struct AudioFile(AudioFileInner);
 enum AudioFileInner {
     Wave(hound::WavReader<Cursor<Vec<u8>>>),
     Symphonia(symphonia_formats::SymphoniaDecodedToPcm),
+    /// Fallback for audio files touchHLE can't decode (e.g. AAC inside a CAF
+    /// container, which no current backend parses). Presented to the guest as
+    /// a valid but silent 16-bit PCM track, so that apps which don't check for
+    /// a decode failure get a usable (if soundless) audio handle instead of a
+    /// null pointer they'd dereference and crash on.
+    Silence {
+        sample_rate: u32,
+        channels: u32,
+        /// Total length of the silent track in bytes of 16-bit PCM.
+        byte_len: u64,
+    },
 }
 
 impl AudioFile {
@@ -68,11 +79,25 @@ impl AudioFile {
         if let Ok(bytes) = Self::read_from_vec(bytes) {
             Ok(bytes)
         } else {
+            // touchHLE couldn't decode this file with any available backend
+            // (a common case: AAC audio inside Apple's CAF container, which no
+            // current backend parses). Rather than failing the open() call —
+            // which some apps don't check, then dereference the resulting null
+            // handle and crash — fall back to a silent track of the same
+            // nominal format. The app runs, just without this sound.
             log!(
-                "Could not decode audio file at path {:?}, likely an unimplemented file format.",
+                "Warning: could not decode audio file at path {:?} (unimplemented format); \
+                 substituting a silent track so the app can continue.",
                 path.as_ref()
             );
-            Err(AudioFileOpenError::FileReadError)
+            // 1 second of 44.1 kHz stereo 16-bit silence. The exact length
+            // doesn't matter much; it just needs to be a valid, non-zero-size
+            // PCM track. 44100 frames * 2 channels * 2 bytes.
+            Ok(AudioFile(AudioFileInner::Silence {
+                sample_rate: 44100,
+                channels: 2,
+                byte_len: 44100 * 2 * 2,
+            }))
         }
     }
 
@@ -139,6 +164,21 @@ impl AudioFile {
                 channels_per_frame: channels,
                 bits_per_channel: 16,
             },
+            AudioFileInner::Silence {
+                sample_rate,
+                channels,
+                ..
+            } => AudioDescription {
+                sample_rate: f64::from(sample_rate),
+                format: AudioFormat::LinearPcm {
+                    is_float: false,
+                    is_little_endian: true,
+                },
+                bytes_per_packet: channels * 2,
+                frames_per_packet: 1,
+                channels_per_frame: channels,
+                bits_per_channel: 16,
+            },
         }
     }
 
@@ -166,13 +206,15 @@ impl AudioFile {
                 ref bytes,
                 ..
             }) => bytes.len() as u64,
+            AudioFileInner::Silence { byte_len, .. } => byte_len,
         }
     }
 
     pub fn packet_count(&self) -> u64 {
         match self.0 {
             AudioFileInner::Wave(_)
-            | AudioFileInner::Symphonia(symphonia_formats::SymphoniaDecodedToPcm { .. }) => {
+            | AudioFileInner::Symphonia(symphonia_formats::SymphoniaDecodedToPcm { .. })
+            | AudioFileInner::Silence { .. } => {
                 // never variable-size
                 self.byte_count() / u64::from(self.packet_size_fixed())
             }
@@ -243,6 +285,14 @@ impl AudioFile {
                 let bytes_to_read = buffer.len().min(bytes.len());
                 let bytes = &bytes[..bytes_to_read];
                 buffer[..bytes_to_read].copy_from_slice(bytes);
+                Ok(bytes_to_read)
+            }
+            AudioFileInner::Silence { byte_len, .. } => {
+                // All-zero PCM. Bound the read by the remaining track length,
+                // matching how the Symphonia arm stops at end-of-data.
+                let remaining = byte_len.saturating_sub(offset);
+                let bytes_to_read = (buffer.len() as u64).min(remaining) as usize;
+                buffer[..bytes_to_read].fill(0);
                 Ok(bytes_to_read)
             }
         }
