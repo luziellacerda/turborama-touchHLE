@@ -123,6 +123,10 @@ fn init_common(env: &mut Environment, this: id) -> id {
     () = msg![env; this addSubview:image_view];
     update(env, this);
 
+    // The frame was set by super's initWithFrame: before these subviews
+    // existed, so that layout pass could not position them. Run it now.
+    () = msg![env; this layoutSubviews];
+
     this
 }
 // TODO: refactor this to be a part of common init
@@ -248,6 +252,25 @@ pub const CLASSES: ClassExports = objc_classes! {
         release(env, background_image);
     }
     msg_super![env; this dealloc]
+}
+
+// A button positions its label and image relative to its own bounds, so the
+// layout has to be redone whenever those change. UIKit defers this via
+// setNeedsLayout and a layout pass before display; touchHLE has no such pass,
+// and its one-shot pass after applicationDidFinishLaunching: never reaches
+// buttons created later, which would leave their labels at a zero-sized frame
+// forever.
+//
+// This is deliberately done here rather than in UIView: laying out every view
+// eagerly also reaches EAGLView, whose layoutSubviews rebuilds the framebuffer
+// and breaks rendering when run before the view has its context.
+- (())setFrame:(CGRect)frame {
+    () = msg_super![env; this setFrame:frame];
+    () = msg![env; this layoutSubviews];
+}
+- (())setBounds:(CGRect)bounds {
+    () = msg_super![env; this setBounds:bounds];
+    () = msg![env; this layoutSubviews];
 }
 
 - (())layoutSubviews {
