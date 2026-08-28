@@ -595,6 +595,16 @@ pub const CLASSES: ClassExports = objc_classes! {
         release(env, anim);
     };
 }
+- (())removeAllAnimations {
+    // Collect all animation ids first, then release them after clearing the
+    // collections (to avoid holding a borrow across release).
+    let host = env.objc.borrow_mut::<CALayerHostObject>(this);
+    let mut to_release: Vec<id> = host.animations.drain().map(|(_key, anim)| anim).collect();
+    to_release.extend(host.anonymous_animations.drain());
+    for anim in to_release {
+        release(env, anim);
+    }
+}
 
 // TODO: more
 
