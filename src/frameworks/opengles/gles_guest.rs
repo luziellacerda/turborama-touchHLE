@@ -1308,6 +1308,35 @@ fn glRenderbufferStorageOES(
         gles.RenderbufferStorageOES(target, internalformat, width, height)
     })
 }
+// GL_APPLE_framebuffer_multisample. touchHLE advertises this extension in its
+// extension string but has no real multisample support. Rather than truly
+// implementing MSAA, we degrade gracefully: allocate an ordinary (non-
+// multisample) renderbuffer, ignoring the requested sample count. The app then
+// renders into what it thinks is a multisample buffer but is really a normal
+// one, so the paired glResolveMultisampleFramebufferAPPLE has nothing to
+// resolve and becomes a no-op. Visual result: the app runs, just without
+// anti-aliasing. This avoids extending the build-time GL bindings generator
+// with multisample entry points that no backend implements anyway.
+fn glRenderbufferStorageMultisampleAPPLE(
+    env: &mut Environment,
+    target: GLenum,
+    _samples: GLsizei,
+    internalformat: GLenum,
+    width: GLsizei,
+    height: GLsizei,
+) {
+    // Same scale hack as the non-multisample path.
+    let factor = env.options.scale_hack.get() as GLsizei;
+    let (width, height) = (width * factor, height * factor);
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        gles.RenderbufferStorageOES(target, internalformat, width, height)
+    })
+}
+fn glResolveMultisampleFramebufferAPPLE(_env: &mut Environment) {
+    // No-op: since glRenderbufferStorageMultisampleAPPLE created an ordinary
+    // renderbuffer, the app already rendered directly into the real buffer and
+    // there is nothing to resolve.
+}
 fn glFramebufferRenderbufferOES(
     env: &mut Environment,
     target: GLenum,
@@ -1663,6 +1692,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(glBindVertexArrayOES(_)),
     export_c_func!(glIsVertexArrayOES(_)),
     export_c_func!(glRenderbufferStorageOES(_, _, _, _)),
+    export_c_func!(glRenderbufferStorageMultisampleAPPLE(_, _, _, _, _)),
+    export_c_func!(glResolveMultisampleFramebufferAPPLE()),
     export_c_func!(glFramebufferRenderbufferOES(_, _, _, _)),
     export_c_func!(glFramebufferTexture2DOES(_, _, _, _, _)),
     export_c_func!(glGetFramebufferAttachmentParameterivOES(_, _, _, _)),
