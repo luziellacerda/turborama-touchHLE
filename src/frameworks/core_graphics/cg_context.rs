@@ -452,6 +452,13 @@ fn CGContextSetAllowsAntialiasing(_env: &mut Environment, context: CGContextRef,
         allow
     );
 }
+fn CGContextSetShouldAntialias(_env: &mut Environment, context: CGContextRef, should: bool) {
+    log!(
+        "TODO: CGContextSetShouldAntialias({:?}, {})",
+        context,
+        should
+    );
+}
 
 fn CGContextSetShouldSmoothFonts(_env: &mut Environment, context: CGContextRef, should: bool) {
     log!(
@@ -617,6 +624,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextRestoreGState(_)),
     export_c_func!(CGContextSetInterpolationQuality(_, _)),
     export_c_func!(CGContextSetAllowsAntialiasing(_, _)),
+    export_c_func!(CGContextSetShouldAntialias(_, _)),
     export_c_func!(CGContextSetShouldSmoothFonts(_, _)),
     export_c_func!(CGContextSetFont(_, _)),
     export_c_func!(CGContextSetFontSize(_, _)),
