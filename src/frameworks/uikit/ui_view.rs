@@ -851,7 +851,11 @@ pub const CLASSES: ClassExports = objc_classes! {
                fromView:(id)other { // UIView*
     if other == nil {
         let window: id = msg![env; this window];
-        assert!(window != nil);
+        if window == nil {
+            // The view isn't in a window yet, so there's no coordinate space to
+            // convert against; return the point unchanged rather than crashing.
+            return point;
+        }
         return msg![env; this convertPoint:point fromView:window]
     }
     let this_layer = env.objc.borrow::<UIViewHostObject>(this).layer;
@@ -862,7 +866,9 @@ pub const CLASSES: ClassExports = objc_classes! {
                  toView:(id)other { // UIView*
     if other == nil {
         let window: id = msg![env; this window];
-        assert!(window != nil);
+        if window == nil {
+            return point;
+        }
         return msg![env; this convertPoint:point toView:window]
     }
     let this_layer = env.objc.borrow::<UIViewHostObject>(this).layer;
@@ -873,7 +879,9 @@ pub const CLASSES: ClassExports = objc_classes! {
              fromView:(id)other { // UIView*
     if other == nil {
         let window: id = msg![env; this window];
-        assert!(window != nil);
+        if window == nil {
+            return rect;
+        }
         return msg![env; this convertRect:rect fromView:window]
     }
     let this_layer = env.objc.borrow::<UIViewHostObject>(this).layer;
@@ -884,7 +892,9 @@ pub const CLASSES: ClassExports = objc_classes! {
                toView:(id)other { // UIView*
     if other == nil {
         let window: id = msg![env; this window];
-        assert!(window != nil);
+        if window == nil {
+            return rect;
+        }
         return msg![env; this convertRect:rect toView:window]
     }
     let this_layer = env.objc.borrow::<UIViewHostObject>(this).layer;
