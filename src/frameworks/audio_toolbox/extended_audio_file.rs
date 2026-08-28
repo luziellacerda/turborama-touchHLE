@@ -103,6 +103,35 @@ fn ExtAudioFileOpenURL(
     0 // success
 }
 
+fn ExtAudioFileWrapAudioFileID(
+    env: &mut Environment,
+    in_file_id: AudioFileID,
+    _in_for_writing: bool,
+    out_ext_audio_file: MutPtr<ExtAudioFileRef>,
+) -> OSStatus {
+    return_if_null!(in_file_id);
+    log_dbg!(
+        "ExtAudioFileWrapAudioFileID({:?}, {:?})",
+        in_file_id,
+        out_ext_audio_file
+    );
+
+    let host_object = ExtAudioFileHostObject {
+        guest_audio_file: in_file_id,
+        client_data_format: None,
+        current_bytes_read: 0,
+    };
+
+    let guest_extended_audio_file = env.mem.alloc_and_write(OpaqueExtAudioFile { _filler: 0 });
+    State::get(&mut env.framework_state)
+        .extended_audio_files
+        .insert(guest_extended_audio_file, host_object);
+
+    env.mem.write(out_ext_audio_file, guest_extended_audio_file);
+
+    0 // success
+}
+
 fn ExtAudioFileGetProperty(
     env: &mut Environment,
     in_ext_audio_file: ExtAudioFileRef,
@@ -329,6 +358,7 @@ fn ExtAudioFileDispose(env: &mut Environment, in_ext_audio_file: ExtAudioFileRef
 
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(ExtAudioFileOpenURL(_, _)),
+    export_c_func!(ExtAudioFileWrapAudioFileID(_, _, _)),
     export_c_func!(ExtAudioFileGetProperty(_, _, _, _)),
     export_c_func!(ExtAudioFileSetProperty(_, _, _, _)),
     export_c_func!(ExtAudioFileRead(_, _, _)),
