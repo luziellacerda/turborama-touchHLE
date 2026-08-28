@@ -75,6 +75,7 @@ pub struct State {
     /// List of views for internal purposes. Non-retaining!
     pub(super) views: Vec<id>,
     pub ui_window: ui_window::State,
+    pub ui_action_sheet: ui_action_sheet::State,
     pub animation_block_count: usize,
 }
 
