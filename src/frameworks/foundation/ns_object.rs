@@ -64,6 +64,12 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @implementation NSObject
 
++ (())load {
+    // +load is called by the runtime when a class is loaded. Classes often
+    // chain up with [super load]; provide a no-op here so that reaching NSObject
+    // at the top of the chain doesn't crash.
+}
+
 + (id)alloc {
     msg![env; this allocWithZone:(MutVoidPtr::null())]
 }
