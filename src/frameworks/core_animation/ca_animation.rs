@@ -397,6 +397,13 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())setSubtype:(CATransitionType)subtype { // CATransitionSubtype (NSString*)
     todo_objc_setter!(this, to_rust_string(env, subtype));
 }
+- (id)fromValue {
+    // CATransition has no fromValue; some apps query it generically.
+    nil
+}
+- (id)toValue {
+    nil
+}
 
 @end
 
