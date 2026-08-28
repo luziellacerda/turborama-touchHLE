@@ -9,7 +9,8 @@
 //! implementation. Here they are the same types.
 
 use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
-use super::CFIndex;
+use super::cf_type::type_id_for_class;
+use super::{CFIndex, CFTypeID};
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::foundation::NSUInteger;
 use crate::mem::ConstVoidPtr;
@@ -54,10 +55,17 @@ fn CFArrayRemoveValueAtIndex(env: &mut Environment, array: CFMutableArrayRef, id
     msg![env; array removeObjectAtIndex:idx]
 }
 
+fn CFArrayGetTypeID(env: &mut Environment) -> CFTypeID {
+    // Must match what CFGetTypeID returns for a CFArray, which normalizes to
+    // the NSArray base class pointer.
+    type_id_for_class(env, "NSArray")
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFArrayCreateMutable(_, _, _)),
     export_c_func!(CFArrayGetCount(_)),
     export_c_func!(CFArrayGetValueAtIndex(_, _)),
     export_c_func!(CFArrayAppendValue(_, _)),
     export_c_func!(CFArrayRemoveValueAtIndex(_, _)),
+    export_c_func!(CFArrayGetTypeID()),
 ];
