@@ -242,8 +242,14 @@ impl super::ObjC {
     /// Get a reference to a host object and downcast it. Panics if there is
     /// no such object, or if downcasting fails.
     pub fn borrow<T: AnyHostObject + 'static>(&self, object: id) -> &T {
-        let mut host_object: &(dyn AnyHostObject + 'static) =
-            &*self.objects.get(&object).unwrap().host_object;
+        let entry = self.objects.get(&object).unwrap_or_else(|| {
+            panic!(
+                "No host object found for {object:?} when trying to borrow it as {:?}. \
+                 The object may be nil, or may have already been deallocated.",
+                std::any::type_name::<T>(),
+            )
+        });
+        let mut host_object: &(dyn AnyHostObject + 'static) = &*entry.host_object;
         loop {
             if let Some(res) = host_object.as_any().downcast_ref() {
                 return res;
