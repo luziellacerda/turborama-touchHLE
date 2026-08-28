@@ -35,7 +35,13 @@ pub(super) struct ThreadInitializer {
 }
 
 fn maybe_initialize_class(env: &mut Environment, receiver: id) {
-    let class_host_object = env.objc.get_host_object(receiver).unwrap();
+    let Some(class_host_object) = env.objc.get_host_object(receiver) else {
+        // No host object at all: the receiver isn't something touchHLE knows
+        // about, e.g. a stale or uninitialized pointer. objc_msgSend already
+        // tolerates those and behaves as if the receiver were nil, so there is
+        // nothing to initialize and no reason to abort here either.
+        return;
+    };
     let Some(&super::ClassHostObject {
         superclass,
         is_metaclass,
