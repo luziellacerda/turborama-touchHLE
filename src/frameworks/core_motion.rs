@@ -6,7 +6,7 @@
 //! The Core Motion framework.
 
 use crate::dyld::HostDylib;
-use crate::objc::{objc_classes, ClassExports};
+use crate::objc::{id, objc_classes, ClassExports};
 
 pub const DYLIB: HostDylib = HostDylib {
     path: "/System/Library/Frameworks/CoreMotion.framework/CoreMotion",
@@ -39,6 +39,27 @@ const CLASSES: ClassExports = objc_classes! {
     // can still return false if the device isn't ready to produce data yet.
     // Here we always return true since we don't model that readiness state.
     true
+}
+
+// touchHLE doesn't feed device tilt through CMMotionManager (the older
+// UIAccelerometer path handles that), so these are accepted no-ops: apps that
+// create, configure and tear down a CMMotionManager won't crash, they just
+// won't receive CoreMotion-style updates.
+- (())setAccelerometerUpdateInterval:(f64)_interval {
+    // no-op
+}
+- (())startAccelerometerUpdates {
+    log!("TODO: [(CMMotionManager *){:?} startAccelerometerUpdates] (ignored)", this);
+}
+- (())startAccelerometerUpdatesToQueue:(id)_queue // NSOperationQueue*
+                            withHandler:(id)_handler { // CMAccelerometerHandler
+    log!(
+        "TODO: [(CMMotionManager *){:?} startAccelerometerUpdatesToQueue:withHandler:] (ignored)",
+        this
+    );
+}
+- (())stopAccelerometerUpdates {
+    // no-op
 }
 
 @end
