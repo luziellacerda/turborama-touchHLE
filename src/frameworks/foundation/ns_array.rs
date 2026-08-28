@@ -382,6 +382,31 @@ pub const CLASSES: ClassExports = objc_classes! {
     this
 }
 
+- (id)initWithArray:(id)array // NSArray*
+          copyItems:(bool)copy_items {
+    // With copyItems:NO this is identical to initWithArray:. With copyItems:YES
+    // each element is replaced by a (shallow) copy made via `copy`, which is
+    // what Cocoa does (it sends -copyWithZone: to each element).
+    let mut objects = Vec::new();
+    let enumerator: id = msg![env; array objectEnumerator];
+    loop {
+        let next: id = msg![env; enumerator nextObject];
+        if next == nil {
+            break;
+        }
+        if copy_items {
+            // `copy` returns a +1 retained object, so no extra retain needed.
+            let copied: id = msg![env; next copy];
+            objects.push(copied);
+        } else {
+            retain(env, next);
+            objects.push(next);
+        }
+    }
+    env.objc.borrow_mut::<ArrayHostObject>(this).array = objects;
+    this
+}
+
 - (id)initWithObjects:(id)firstObj, ...args {
     retain(env, firstObj);
     let mut objects = vec![firstObj];
