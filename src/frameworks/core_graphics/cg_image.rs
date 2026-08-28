@@ -135,7 +135,14 @@ fn CGImageCreate(
     assert_eq!(alpha_info | byte_order, bitmap_info); // TODO
     match byte_order {
         kCGImageByteOrderDefault | kCGImageByteOrder32Big => {
-            assert_eq!(alpha_info, kCGImageAlphaPremultipliedLast); // TODO
+            // Both premultiplied and straight (non-premultiplied) RGBA have the
+            // same RGBA byte layout; we pass the bytes through unchanged, so
+            // accept either. (The difference is only whether RGB was
+            // premultiplied by alpha.)
+            assert!(
+                alpha_info == kCGImageAlphaPremultipliedLast
+                    || alpha_info == kCGImageAlphaLast
+            ); // TODO
         }
         kCGImageByteOrder32Little => {
             // TODO: fix CGImageGetAlphaInfo()
