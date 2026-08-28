@@ -194,6 +194,27 @@ fn CFURLHasDirectoryPath(env: &mut Environment, url: CFURLRef) -> bool {
         || msg![env; last isEqual:(get_static_str(env, ".."))]
 }
 
+fn CFURLCreateStringByAddingPercentEscapes(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    original_string: CFStringRef,
+    _chars_to_leave_unescaped: CFStringRef,
+    _legal_chars_to_be_escaped: CFStringRef,
+    encoding: CFStringEncoding,
+) -> CFStringRef {
+    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default());
+    if original_string.is_null() {
+        return Ptr::null();
+    }
+    // The charactersToLeaveUnescaped / legalURLCharactersToBeEscaped refinements
+    // aren't modelled; delegate to NSString's percent-escaping (the common case
+    // passes nil for both). The result is retained (Create rule); NSString's
+    // method returns an autoreleased string, so retain it here.
+    let ns_encoding = CFStringConvertEncodingToNSStringEncoding(env, encoding);
+    let escaped: id = msg![env; original_string stringByAddingPercentEscapesUsingEncoding:ns_encoding];
+    msg![env; escaped retain]
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFURLGetFileSystemRepresentation(_, _, _, _)),
     export_c_func!(CFURLCreateFromFileSystemRepresentation(_, _, _, _)),
@@ -205,4 +226,5 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFURLCreateCopyAppendingPathComponent(_, _, _, _)),
     export_c_func!(CFURLCreateCopyDeletingLastPathComponent(_, _)),
     export_c_func!(CFURLHasDirectoryPath(_)),
+    export_c_func!(CFURLCreateStringByAddingPercentEscapes(_, _, _, _, _)),
 ];
