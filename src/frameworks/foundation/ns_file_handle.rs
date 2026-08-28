@@ -133,6 +133,17 @@ pub const CLASSES: ClassExports = objc_classes! {
     }
 }
 
+- (())truncateFileAtOffset:(i64)offset {
+    let fd = env.objc.borrow::<NSFileHandleHostObject>(this).fd;
+    if posix_io::ftruncate(env, fd, offset) == -1 {
+        panic!("truncateFileAtOffset: failed")
+    }
+    // iOS also moves the file position to the new end.
+    if posix_io::lseek(env, fd, offset, posix_io::SEEK_SET) == -1 {
+        panic!("truncateFileAtOffset: seek failed")
+    }
+}
+
 - (())closeFile {
     // file is closed on dealloc
     // TODO: keep closed state and raise an exception
