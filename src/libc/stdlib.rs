@@ -542,6 +542,41 @@ fn realpath(
     resolve_name
 }
 
+/// `int _NSGetExecutablePath(char *buf, uint32_t *bufsize)`
+/// Writes the path to the running executable into `buf`. `*bufsize` is
+/// in/out: on input the size of `buf`, and if it's too small the function
+/// returns -1 and sets `*bufsize` to the required size (including the NUL
+/// terminator); on success it returns 0.
+fn _NSGetExecutablePath(
+    env: &mut Environment,
+    buf: MutPtr<u8>,
+    bufsize: MutPtr<GuestUSize>,
+) -> i32 {
+    let path = env.bundle.executable_path().as_str().to_string();
+    let needed = path.len() as GuestUSize + 1; // + NUL terminator
+
+    let available = env.mem.read(bufsize);
+    // Always report the needed size back, matching the real function.
+    env.mem.write(bufsize, needed);
+
+    if available < needed || buf.is_null() {
+        log_dbg!(
+            "_NSGetExecutablePath: buffer too small (have {}, need {}), returning -1",
+            available,
+            needed
+        );
+        return -1;
+    }
+
+    env.mem
+        .bytes_at_mut(buf, path.len() as GuestUSize)
+        .copy_from_slice(path.as_bytes());
+    env.mem.write(buf + path.len() as GuestUSize, b'\0');
+
+    log_dbg!("_NSGetExecutablePath => {:?}", path);
+    0
+}
+
 fn mbstowcs(
     env: &mut Environment,
     pwcs: MutPtr<wchar_t>,
@@ -635,6 +670,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(strtol(_, _, _)),
     export_c_func!(realpath(_, _)),
     export_c_func_aliased!("realpath$DARWIN_EXTSN", realpath(_, _)),
+    export_c_func!(_NSGetExecutablePath(_, _)),
     export_c_func!(mbstowcs(_, _, _)),
     export_c_func!(wcstombs(_, _, _)),
     export_c_func!(system(_)),
