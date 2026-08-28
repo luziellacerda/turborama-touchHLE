@@ -191,10 +191,24 @@ pub const CLASSES: ClassExports = objc_classes! {
     this == other
 }
 
-// TODO: Instance description and debugDescription.
-// This is not hard to add, but before adding a fallback implementation of it,
-// we should make sure all the Foundation classes' overrides of it are there,
-// to prevent weird behavior.
+// Instance-level description fallback. Per the note above, the important
+// Foundation classes (NSString, NSArray, NSDictionary, NSValue, NSDate, NSURL)
+// already provide their own -description overrides, so this generic fallback
+// only applies to plain objects, where the Cocoa-style "<ClassName: 0xADDR>"
+// form is exactly what's expected. This lets any object respond to
+// -description (and -debugDescription) instead of raising "does not respond to
+// selector", which several apps rely on.
+- (id)description {
+    let class = ObjC::read_isa(this, &env.mem);
+    let name = env.objc.get_class_name(class).to_string();
+    let str = from_rust_string(env, format!("<{}: {:#x}>", name, this.to_bits()));
+    autorelease(env, str)
+}
+
+- (id)debugDescription {
+    msg![env; this description]
+}
+
 // TODO: localized description methods also? (not sure if NSObject has them)
 
 // Helper for NSCopying
