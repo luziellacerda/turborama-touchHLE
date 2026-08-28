@@ -5,7 +5,7 @@
  */
 //! `UIAlertView`.
 
-use crate::frameworks::foundation::ns_string;
+use crate::frameworks::foundation::{ns_string, NSInteger};
 use crate::objc::{id, msg_super, nil, objc_classes, ClassExports};
 use std::borrow::Cow;
 
@@ -32,6 +32,27 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (())addButtonWithTitle:(id)title {
     log!("TODO: [(UIAlertView *){:?} addButtonWithTitle:{}]", this, ns_string::to_rust_string(env, title));
+}
+
+- (())setDelegate:(id)_delegate {
+    // The alert isn't rendered, so no delegate callbacks will be made.
+}
+- (id)delegate {
+    nil
+}
+- (())setTitle:(id)_title {
+}
+- (())setMessage:(id)_message {
+}
+- (())setCancelButtonIndex:(NSInteger)_index {
+}
+- (NSInteger)cancelButtonIndex {
+    -1
+}
+- (bool)isVisible {
+    false
+}
+- (())dismissWithClickedButtonIndex:(NSInteger)_index animated:(bool)_animated {
 }
 
 - (())show {
