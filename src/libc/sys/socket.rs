@@ -180,13 +180,38 @@ fn socket(env: &mut Environment, domain: i32, type_: i32, protocol: i32) -> File
     fd
 }
 
-fn ioctl(env: &mut Environment, fd: i32, request: u32, _args: DotDotDot) -> i32 {
+/// `FIONBIO`: set or clear non-blocking mode on a descriptor.
+const FIONBIO: u32 = 0x8004667e;
+
+fn ioctl(env: &mut Environment, fd: i32, request: u32, args: DotDotDot) -> i32 {
     if !is_socket(env, fd) {
         // POSIX answers EBADF rather than aborting, and apps reach here with a
         // stale or failed descriptor often enough that it must not be fatal.
         log!("TODO: ioctl({} (not a socket), {:#x?}, ...) => -1", fd, request);
         return -1;
     }
+
+    if request == FIONBIO {
+        // touchHLE keeps every host socket non-blocking already, so there is
+        // nothing to change; what matters is reporting success. Apps use this
+        // to prepare a socket before connecting and treat a failure here as
+        // the whole connection attempt failing, discarding a connection that
+        // actually works.
+        let mut args = args.start();
+        let value_ptr: ConstPtr<i32> = args.next(env);
+        let nonblocking = if value_ptr.is_null() {
+            -1
+        } else {
+            env.mem.read(value_ptr)
+        };
+        log_dbg!(
+            "ioctl({} (socket), FIONBIO, {}) => 0 (sockets are always non-blocking)",
+            fd,
+            nonblocking
+        );
+        return 0;
+    }
+
     log!("TODO: ioctl({} (socket), {:#x?}, ...) => -1", fd, request);
     -1
 }
