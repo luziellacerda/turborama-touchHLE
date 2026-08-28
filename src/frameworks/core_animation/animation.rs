@@ -265,7 +265,13 @@ impl State {
         for animation in self.started_animations {
             let delegate = msg![env; animation delegate];
             if delegate != nil {
-                () = msg![env; delegate animationDidStart: animation];
+                let responds: bool = match env.objc.lookup_selector("animationDidStart:") {
+                    Some(sel) => msg![env; delegate respondsToSelector:sel],
+                    None => false,
+                };
+                if responds {
+                    () = msg![env; delegate animationDidStart: animation];
+                }
             }
         }
 
@@ -275,7 +281,13 @@ impl State {
         for (layer, animation, finished, removed_on_completion, key) in self.finished_animations {
             let delegate = msg![env; animation delegate];
             if delegate != nil {
-                () = msg![env; delegate animationDidStop: animation finished: finished];
+                let responds: bool = match env.objc.lookup_selector("animationDidStop:finished:") {
+                    Some(sel) => msg![env; delegate respondsToSelector:sel],
+                    None => false,
+                };
+                if responds {
+                    () = msg![env; delegate animationDidStop: animation finished: finished];
+                }
             }
 
             if removed_on_completion {
